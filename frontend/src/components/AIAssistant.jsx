@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Terminal, X } from 'lucide-react';
 
 const aiResponses = [
   "Based on current social signals, DOGE and PEPE are showing the strongest momentum. PEPE's hype score of 91 puts it in extreme territory — historically, corrections follow within 24-48 hours.",
@@ -22,22 +22,45 @@ export default function AIAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
-    const userMsg = { role: 'user', text: inputValue };
+    const query = inputValue;
+    const userMsg = { role: 'user', text: query };
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
 
-    setTimeout(() => {
-      const response = aiResponses[responseIndex.current % aiResponses.length];
-      responseIndex.current++;
-      setMessages(prev => [...prev, { role: 'assistant', text: response }]);
-    }, 800);
+    // Add a loading placeholder
+    const loadingId = Date.now().toString();
+    setMessages(prev => [...prev, { id: loadingId, role: 'assistant', text: "Analyzing live data..." }]);
+
+    try {
+      const res = await fetch('http://localhost:8001/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query })
+      });
+      const data = await res.json();
+      
+      setMessages(prev => prev.map(msg => 
+        msg.id === loadingId ? { role: 'assistant', text: data.response } : msg
+      ));
+    } catch (error) {
+      setMessages(prev => prev.map(msg => 
+        msg.id === loadingId ? { role: 'assistant', text: "[Connection Error]: Cannot reach AI Brain at localhost:8001." } : msg
+      ));
+    }
   };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleSend();
+  };
+
+  const formatMessage = (text) => {
+    if (!text) return null;
+    // Replace markdown bold **text** with HTML <strong>text</strong>
+    const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#00fd87]">$1</strong>');
+    return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
   };
 
   return (
@@ -45,13 +68,22 @@ export default function AIAssistant() {
       {isOpen && (
         <div className="ai-assistant-panel">
           <div className="ai-panel-header">
-            <span className="ai-panel-title">AI ANALYST</span>
-            <button className="ai-panel-close" onClick={() => setIsOpen(false)}>×</button>
+            <div className="ai-panel-title flex items-center gap-2">
+              <Terminal size={14} className="text-[#00fd87]" />
+              AI HYPE ANALYST
+            </div>
+            <button className="ai-panel-close" onClick={() => setIsOpen(false)}>
+              <X size={16} />
+            </button>
           </div>
-          <div className="ai-panel-messages">
-            {messages.map((msg, i) => (
-              <div key={i} className={`ai-message ${msg.role === 'assistant' ? 'bot' : 'user'}`}>
-                {msg.text}
+
+          <div className="ai-panel-messages font-mono text-[11px]">
+            {messages.map((msg, idx) => (
+              <div
+                key={msg.id || idx}
+                className={`ai-message ${msg.role === 'user' ? 'user' : 'bot'} whitespace-pre-wrap leading-relaxed`}
+              >
+                {formatMessage(msg.text)}
               </div>
             ))}
             <div ref={messagesEndRef} />
@@ -72,11 +104,11 @@ export default function AIAssistant() {
       )}
       <button
         id="ai-assistant-btn"
-        className="ai-assistant-btn"
+        className="fixed bottom-8 right-8 z-[1000] w-12 h-12 rounded-2xl bg-[#00fd87] flex items-center justify-center text-[#0e0e0e] shadow-[0_0_20px_rgba(0,253,135,0.3)] hover:scale-110 hover:shadow-[0_0_30px_rgba(0,253,135,0.6)] transition-all cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
         title="AI Assistant"
       >
-        <Sparkles size={20} />
+        <Sparkles size={22} className="text-[#0e0e0e] fill-current" />
       </button>
     </>
   );
