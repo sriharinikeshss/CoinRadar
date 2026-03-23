@@ -10,7 +10,10 @@ Do NOT edit main.py — that belongs to Dev 1.
 import os
 import datetime
 import requests
+from dotenv import load_dotenv
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+load_dotenv()
 
 # ──────────────────────────────────────────────
 # CONFIG
