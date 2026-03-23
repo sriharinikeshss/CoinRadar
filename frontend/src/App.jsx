@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import './App.css';
-import { coins, aiInsights, alerts, defaultCoinId } from './data/mockData';
+import { coins as initialCoins, aiInsights as initialInsights, alerts, defaultCoinId } from './data/mockData';
 import TopBar from './components/TopBar';
 import LeftPanel from './components/LeftPanel';
 import RadarCore from './components/RadarCore';
@@ -8,16 +8,21 @@ import RightPanel from './components/RightPanel';
 import BottomPanel from './components/BottomPanel';
 import AIAssistant from './components/AIAssistant';
 import CoinOverlay from './components/CoinOverlay';
+import AddCoinModal from './components/AddCoinModal';
 
 function App() {
+  const [coinsData, setCoinsData] = useState(initialCoins);
+  const [insightsData, setInsightsData] = useState(initialInsights);
   const [selectedCoinId, setSelectedCoinId] = useState(defaultCoinId);
   const [searchQuery, setSearchQuery] = useState('');
   const [showOverlay, setShowOverlay] = useState(false);
+  const [isAddCoinOpen, setIsAddCoinOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
-  const selectedCoin = coins.find(c => c.id === selectedCoinId) || coins[0];
-  const selectedInsight = aiInsights.find(i => i.coinId === selectedCoinId) || aiInsights[0];
+  const selectedCoin = coinsData.find(c => c.id === selectedCoinId) || coinsData[0];
+  const selectedInsight = insightsData.find(i => i.coinId === selectedCoinId) || insightsData[0];
 
-  const filteredCoins = coins.filter(c =>
+  const filteredCoins = coinsData.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.symbol.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -32,20 +37,35 @@ function App() {
     setShowOverlay(true);
   };
 
+  const handleAddCoin = (newCoin, newInsight) => {
+    setCoinsData(prev => [...prev, newCoin]);
+    setInsightsData(prev => [...prev, newInsight]);
+    setIsAddCoinOpen(false);
+    
+    // Show toast
+    setToastMessage(`Successfully added ${newCoin.name}!`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   return (
     <div className="app-container">
-      <TopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <TopBar 
+        searchQuery={searchQuery} 
+        onSearchChange={setSearchQuery}
+        onAddCoin={() => setIsAddCoinOpen(true)}
+      />
 
       <div className="main-content">
         <LeftPanel
           coins={filteredCoins}
           selectedCoinId={selectedCoinId}
           onCoinSelect={handleCoinSelect}
+          searchQuery={searchQuery || ''}
         />
 
         <div className="center-panel">
           <RadarCore
-            coins={coins}
+            coins={coinsData}
             selectedCoinId={selectedCoinId}
             onBubbleClick={handleBubbleClick}
           />
@@ -67,6 +87,21 @@ function App() {
       <BottomPanel coin={selectedCoin} />
 
       <AIAssistant />
+      
+      {isAddCoinOpen && (
+        <AddCoinModal 
+          onClose={() => setIsAddCoinOpen(false)}
+          onAdd={handleAddCoin}
+          nextId={Math.max(...coinsData.map(c => c.id)) + 1}
+        />
+      )}
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="success-toast">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }
