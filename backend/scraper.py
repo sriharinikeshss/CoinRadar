@@ -315,6 +315,12 @@ def get_dexscreener_data(symbol: str) -> Optional[dict]:
 
 # ───────────────────────── Aggregation pipeline ─────────────────────────
 
+# These coins ALWAYS appear in the output, even if Reddit doesn't mention them.
+STICKY_COINS = {"PEPE", "DOGE", "SHIB", "WIF", "BONK", "FLOKI"}
+
+MAX_DISPLAY_COINS = 10  # Limit for clean radar display
+
+
 def build_token_list() -> list[dict]:
     """
     End-to-end pipeline:
@@ -322,12 +328,24 @@ def build_token_list() -> list[dict]:
 
     Always returns a well-formed list, even under total API failure
     (falls back to mock data).  The frontend always gets stable output.
+
+    Sticky coins (PEPE, DOGE, etc.) are always included even if
+    Reddit didn't mention them in this scrape cycle.
     """
     reddit_data = get_reddit_data()
 
     if not reddit_data:
         print("[scraper] ⚠ No data at all — returning empty list")
         return []
+
+    # Ensure sticky coins are in the data (with baseline values if missing)
+    for sticky in STICKY_COINS:
+        if sticky not in reddit_data:
+            reddit_data[sticky] = {
+                "mentions": 0,
+                "titles": [],
+                "history": [0] * 5,
+            }
 
     tokens: list[dict] = []
 
@@ -342,9 +360,9 @@ def build_token_list() -> list[dict]:
         # Use our ML & Intelligence module instead of simple heuristics
         payload = {
             "coin": dex["symbol"],
-            "tweets": info.get("titles", []), # Need to pass real tweets down here
+            "tweets": info.get("titles", []),
             "mention_count_now": mentions,
-            "mention_count_prev": info.get("mentions_prev", mentions), # Mock previous data for now
+            "mention_count_prev": info.get("mentions_prev", mentions),
             "history": info.get("history", [mentions]*5)
         }
         
@@ -365,8 +383,9 @@ def build_token_list() -> list[dict]:
         if USE_REAL_DATA:
             time.sleep(0.3)
 
-    # Sort by pump_score descending
+    # Sort by pump_score descending, limit to top N for clean display
     tokens.sort(key=lambda t: t["pump_score"], reverse=True)
+    tokens = tokens[:MAX_DISPLAY_COINS]
 
     source = "LIVE" if USE_REAL_DATA else "MOCK"
     print(f"[scraper] ✓ Pipeline complete ({source}): {len(tokens)} tokens")

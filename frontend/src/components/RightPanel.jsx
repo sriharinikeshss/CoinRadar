@@ -1,102 +1,100 @@
-import { useState, useEffect, useRef } from 'react';
-import CircularProgress from './CircularProgress';
-
-function TypingText({ text, speed = 30 }) {
-  const [displayed, setDisplayed] = useState('');
-  const indexRef = useRef(0);
-
-  useEffect(() => {
-    setDisplayed('');
-    indexRef.current = 0;
-
-    const interval = setInterval(() => {
-      if (indexRef.current < text.length) {
-        setDisplayed(text.slice(0, indexRef.current + 1));
-        indexRef.current++;
-      } else {
-        clearInterval(interval);
-      }
-    }, speed);
-
-    return () => clearInterval(interval);
-  }, [text, speed]);
-
-  return (
-    <span className="ai-insight-text">
-      {displayed}
-    </span>
-  );
-}
+import React from 'react';
 
 export default function RightPanel({ coin, insight, alerts }) {
-  const [visibleAlerts, setVisibleAlerts] = useState([]);
-
-  useEffect(() => {
-    setVisibleAlerts([]);
-    alerts.forEach((alert, i) => {
-      setTimeout(() => {
-        setVisibleAlerts(prev => [...prev, alert]);
-      }, i * 200);
-    });
-  }, [alerts]);
+  if (!coin) return null;
 
   return (
-    <aside className="right-column">
-      {/* AI Insights */}
-      <div className="panel-section" style={{ animationDelay: '0.1s' }}>
-        <div className="panel-section-title">AI Insight</div>
-        <div className="ai-insight-box">
-          <TypingText key={insight.coinId} text={insight.text} speed={20} />
+    <>
+      {/* AI INSIGHT */}
+      <div className="bg-surface-container-highest rounded-xl p-5 border border-primary/10 relative overflow-hidden shrink-0">
+        <div className="absolute -right-4 -top-4 w-16 h-16 bg-primary/5 blur-2xl rounded-full"></div>
+        <div className="flex items-center gap-2 mb-4">
+          <span className="material-symbols-outlined text-primary text-sm">auto_awesome</span>
+          <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-on-surface uppercase">AI Insight</h3>
         </div>
+        <p className="text-xs text-secondary leading-relaxed font-light">
+          {insight ? (
+            <span dangerouslySetInnerHTML={{ __html: insight.text.replace(new RegExp(coin.symbol, 'g'), `<span class="text-primary font-bold">${coin.symbol}</span>`) }} />
+          ) : (
+            `Analyzing real-time signals for <span class="text-primary font-bold">${coin.symbol}</span>...`
+          )}
+        </p>
       </div>
 
-      {/* Alerts */}
-      <div className="panel-section" style={{ animationDelay: '0.2s' }}>
-        <div className="panel-section-title">Live Alerts</div>
-        <div className="alerts-list">
-          {visibleAlerts.map((alert, i) => (
-            <div
-              key={`${alert.id}-${i}`}
-              className={`alert-item severity-${alert.severity}`}
-              style={{ animationDelay: `${i * 0.1}s` }}
+      {/* LIVE ALERTS */}
+      <div className="flex flex-col gap-3 shrink-0">
+        <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase px-1">Live Alerts</h3>
+        
+        {alerts.length === 0 && (
+          <div className="text-[11px] text-outline py-4 px-2 italic">Monitoring network...</div>
+        )}
+
+        {alerts.map((alert) => {
+          const isHigh = alert.severity === 'high';
+          const isMedium = alert.severity === 'medium';
+          
+          return (
+            <div 
+              key={alert.id}
+              className={`${isHigh ? 'bg-error-container/10 border-error/10' : isMedium ? 'bg-surface-container border-tertiary/10' : 'bg-surface-container border-white/5'} border rounded-xl p-4 flex items-start gap-3 transition-transform hover:-translate-x-1 duration-200 cursor-default`}
             >
-              <div className="alert-message">{alert.message}</div>
-              <div className="alert-time">{alert.time}</div>
+              <span className={`material-symbols-outlined text-lg ${isHigh ? 'text-error' : isMedium ? 'text-tertiary' : 'text-primary'}`}>
+                {alert.icon || (isHigh ? 'local_fire_department' : isMedium ? 'bolt' : 'notifications')}
+              </span>
+              <div>
+                <div className="text-[10px] font-bold text-on-surface mb-1 flex justify-between items-center w-full">
+                  <span>{alert.title || 'NETWORK EVENT'}</span>
+                  <span className="text-[9px] font-normal text-outline ml-4">{alert.time}</span>
+                </div>
+                <div className="text-[11px] text-secondary">{alert.message}</div>
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Metrics */}
-      <div className="panel-section" style={{ animationDelay: '0.3s' }}>
-        <div className="panel-section-title">Quick Metrics</div>
-        <div className="metrics-grid">
-          <div className="metric-item">
-            <CircularProgress
-              key={`sent-${coin.id}`}
-              value={coin.sentimentPercent}
-              color={coin.sentiment === 'positive' ? '#00FF88' : coin.sentiment === 'negative' ? '#FF4D4D' : '#FFCC00'}
-            />
-            <span className="metric-label">Sentiment</span>
+      {/* QUICK METRICS */}
+      <div className="mt-auto shrink-0 pb-4">
+        <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase mb-4 px-1">Quick Metrics</h3>
+        <div className="grid grid-cols-3 gap-2">
+          
+          {/* Sentiment */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <svg className="w-full h-full rotate-[270deg]">
+                <circle className="text-surface-container-highest" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" strokeWidth="4"></circle>
+                <circle className="text-primary drop-shadow-[0_0_4px_rgba(0,253,135,0.4)] transition-all duration-1000 ease-out" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" strokeDasharray="175" strokeDashoffset={175 - (175 * Math.max(0, coin.sentimentPercent || coin.hypeScore)) / 100} strokeWidth="4" strokeLinecap="round"></circle>
+              </svg>
+              <span className="absolute text-[10px] font-bold text-on-surface font-headline">{coin.sentimentPercent || coin.hypeScore}%</span>
+            </div>
+            <span className="text-[8px] text-outline uppercase tracking-widest font-bold">Sentiment</span>
           </div>
-          <div className="metric-item">
-            <CircularProgress
-              key={`fomo-${coin.id}`}
-              value={coin.fomo}
-              color={coin.fomo > 70 ? '#FF4D4D' : '#FFCC00'}
-            />
-            <span className="metric-label">FOMO</span>
+
+          {/* FOMO */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <svg className="w-full h-full rotate-[270deg]">
+                <circle className="text-surface-container-highest" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" strokeWidth="4"></circle>
+                <circle className="text-tertiary drop-shadow-[0_0_4px_rgba(126,230,255,0.4)] transition-all duration-1000 ease-out" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" strokeDasharray="175" strokeDashoffset={175 - (175 * (coin.fomoPercent || Math.max(0, coin.hypeScore - 15))) / 100} strokeWidth="4" strokeLinecap="round"></circle>
+              </svg>
+              <span className="absolute text-[10px] font-bold text-on-surface font-headline">{coin.fomoPercent || Math.max(0, coin.hypeScore - 15)}%</span>
+            </div>
+            <span className="text-[8px] text-outline uppercase tracking-widest font-bold">FOMO</span>
           </div>
-          <div className="metric-item">
-            <CircularProgress
-              key={`eng-${coin.id}`}
-              value={coin.engagement}
-              color="#00AAFF"
-            />
-            <span className="metric-label">Engage</span>
+
+          {/* Engage */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <svg className="w-full h-full rotate-[270deg]">
+                <circle className="text-surface-container-highest" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" strokeWidth="4"></circle>
+                <circle className="text-[#00fd87] drop-shadow-[0_0_4px_rgba(0,253,135,0.4)] transition-all duration-1000 ease-out" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" strokeDasharray="175" strokeDashoffset={175 - (175 * Math.max(0, coin.hypeScore)) / 100} strokeWidth="4" strokeLinecap="round"></circle>
+              </svg>
+              <span className="absolute text-[10px] font-bold text-on-surface font-headline">{coin.hypeScore}%</span>
+            </div>
+            <span className="text-[8px] text-outline uppercase tracking-widest font-bold">Engage</span>
           </div>
         </div>
       </div>
-    </aside>
+    </>
   );
 }

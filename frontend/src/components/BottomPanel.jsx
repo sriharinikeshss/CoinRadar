@@ -1,349 +1,135 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-
-function TrendGraph({ coin }) {
-  const data = coin.priceHistory || [];
-  const prediction = coin.prediction || [];
-  const svgRef = useRef(null);
-  const [animated, setAnimated] = useState(false);
-  const [hoverInfo, setHoverInfo] = useState(null);
-
-  useEffect(() => {
-    setAnimated(false);
-    const timer = setTimeout(() => setAnimated(true), 100);
-    return () => clearTimeout(timer);
-  }, [coin.id]);
-
-  if (data.length < 2) return null;
-
-  const allData = [...data, ...prediction];
-  const min = Math.min(...allData) * 0.9;
-  const max = Math.max(...allData) * 1.1;
-  const range = max - min || 1;
-
-  const w = 400, h = 160, padX = 35, padY = 20;
-  const totalPoints = allData.length;
-
-  const getPoint = (val, i) => {
-    const x = padX + (i / (totalPoints - 1)) * (w - padX * 2);
-    const y = h - padY - ((val - min) / range) * (h - padY * 2);
-    return { x, y };
-  };
-
-  const historyPoints = data.map((v, i) => getPoint(v, i));
-  const predPoints = prediction.map((v, i) => getPoint(v, data.length + i));
-
-  // Smooth curve path using cubic bezier
-  const smoothPath = (points) => {
-    if (points.length < 2) return '';
-    let path = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpx = (prev.x + curr.x) / 2;
-      path += ` C ${cpx} ${prev.y}, ${cpx} ${curr.y}, ${curr.x} ${curr.y}`;
-    }
-    return path;
-  };
-
-  const historyPath = smoothPath(historyPoints);
-  const lastHist = historyPoints[historyPoints.length - 1];
-  const areaPath = `${historyPath} L ${lastHist.x} ${h - padY} L ${historyPoints[0].x} ${h - padY} Z`;
-
-  let predPath = '';
-  if (predPoints.length > 0) {
-    const allPred = [lastHist, ...predPoints];
-    predPath = smoothPath(allPred);
-  }
-
-  const totalLength = 2000;
-
-  const handleMouseMove = useCallback((e) => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * w;
-
-    // Find closest point
-    let closest = null;
-    let minDist = Infinity;
-    const allPoints = [...historyPoints.map((p, i) => ({ ...p, val: data[i], isPred: false })),
-                       ...predPoints.map((p, i) => ({ ...p, val: prediction[i], isPred: true }))];
-    
-    for (const pt of allPoints) {
-      const dist = Math.abs(pt.x - mouseX);
-      if (dist < minDist) {
-        minDist = dist;
-        closest = pt;
-      }
-    }
-
-    if (closest && minDist < 30) {
-      setHoverInfo({
-        x: closest.x,
-        y: closest.y,
-        value: closest.val,
-        isPred: closest.isPred,
-        screenX: (closest.x / w) * rect.width + rect.left,
-      });
-    } else {
-      setHoverInfo(null);
-    }
-  }, [data, prediction, historyPoints, predPoints]);
-
-  return (
-    <div className="trend-graph-wrapper" style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <svg
-        ref={svgRef}
-        className="trend-graph-svg"
-        viewBox={`0 0 ${w} ${h}`}
-        preserveAspectRatio="none"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoverInfo(null)}
-        style={{ cursor: 'crosshair' }}
-      >
-        <defs>
-          <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#00FF88" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#00FF88" stopOpacity="0.02" />
-          </linearGradient>
-          <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#00C46A" />
-            <stop offset="100%" stopColor="#00FF88" />
-          </linearGradient>
-        </defs>
-
-        {/* Grid lines */}
-        {[0.25, 0.5, 0.75].map(frac => (
-          <line
-            key={frac}
-            x1={padX} y1={padY + (h - padY * 2) * frac}
-            x2={w - padX} y2={padY + (h - padY * 2) * frac}
-            stroke="rgba(255,255,255,0.04)" strokeWidth="1"
-          />
-        ))}
-
-        {/* Area fill */}
-        <path d={areaPath} fill="url(#trendGradient)" opacity={animated ? 0.5 : 0} style={{ transition: 'opacity 1s' }} />
-
-        {/* History line */}
-        <path
-          d={historyPath}
-          fill="none"
-          stroke="url(#lineGradient)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={totalLength}
-          strokeDashoffset={animated ? 0 : totalLength}
-          style={{ transition: `stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1)` }}
-        />
-
-        {/* Prediction line */}
-        {predPath && (
-          <path
-            d={predPath}
-            fill="none"
-            stroke="#00FF88"
-            strokeWidth="2"
-            strokeDasharray="6 4"
-            opacity="0.4"
-            strokeLinecap="round"
-          />
-        )}
-
-        {/* Data points dots */}
-        {animated && historyPoints.map((p, i) => (
-          <circle
-            key={`dot-${i}`}
-            cx={p.x} cy={p.y} r="2.5"
-            fill="#00FF88"
-            opacity="0.6"
-          />
-        ))}
-
-        {/* Hover crosshair */}
-        {hoverInfo && (
-          <>
-            <line
-              x1={hoverInfo.x} y1={padY}
-              x2={hoverInfo.x} y2={h - padY}
-              stroke="rgba(0, 255, 136, 0.3)" strokeWidth="1"
-              strokeDasharray="3 3"
-            />
-            <circle cx={hoverInfo.x} cy={hoverInfo.y} r="5"
-              fill="none" stroke="#00FF88" strokeWidth="2" />
-            <circle cx={hoverInfo.x} cy={hoverInfo.y} r="2.5"
-              fill="#00FF88" />
-          </>
-        )}
-
-        {/* Divider line */}
-        {predPoints.length > 0 && (
-          <line
-            x1={lastHist.x} y1={padY}
-            x2={lastHist.x} y2={h - padY}
-            stroke="rgba(255,255,255,0.08)"
-            strokeDasharray="4 4"
-          />
-        )}
-
-        {/* Now label */}
-        {predPoints.length > 0 && (
-          <text x={lastHist.x} y={padY - 4}
-            fill="rgba(255,255,255,0.3)" fontSize="7"
-            textAnchor="middle" fontFamily="Inter">
-            NOW
-          </text>
-        )}
-      </svg>
-
-      {/* Hover tooltip */}
-      {hoverInfo && (
-        <div style={{
-          position: 'absolute',
-          left: `${(hoverInfo.x / w) * 100}%`,
-          top: `${(hoverInfo.y / h) * 100 - 18}%`,
-          transform: 'translateX(-50%)',
-          background: 'rgba(20, 20, 20, 0.95)',
-          border: '1px solid rgba(0, 255, 136, 0.25)',
-          borderRadius: '6px',
-          padding: '4px 10px',
-          fontSize: '11px',
-          fontFamily: 'JetBrains Mono, monospace',
-          color: '#00FF88',
-          pointerEvents: 'none',
-          whiteSpace: 'nowrap',
-          zIndex: 10,
-          backdropFilter: 'blur(8px)',
-        }}>
-          {hoverInfo.isPred ? 'Pred: ' : ''}{hoverInfo.value.toFixed(6)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HypeMeter({ score }) {
-  const [animated, setAnimated] = useState(false);
-
-  useEffect(() => {
-    setAnimated(false);
-    const timer = setTimeout(() => setAnimated(true), 200);
-    return () => clearTimeout(timer);
-  }, [score]);
-
-  const w = 200, h = 120;
-  const cx = w / 2, cy = h - 10;
-  const radius = 65;
-  const startAngle = Math.PI;
-  const scoreAngle = startAngle - (score / 100) * Math.PI;
-
-  const arcPath = (start, end, r) => {
-    const x1 = cx + r * Math.cos(start);
-    const y1 = cy + r * Math.sin(start);
-    const x2 = cx + r * Math.cos(end);
-    const y2 = cy + r * Math.sin(end);
-    const largeArc = Math.abs(end - start) > Math.PI ? 1 : 0;
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
-  };
-
-  const needleAngle = animated ? scoreAngle : startAngle;
-  const needleLen = radius - 8;
-  const nx = cx + needleLen * Math.cos(needleAngle);
-  const ny = cy + needleLen * Math.sin(needleAngle);
-
-  const getColor = (s) => {
-    if (s > 75) return '#FF4D4D';
-    if (s > 50) return '#FFCC00';
-    return '#00FF88';
-  };
-
-  return (
-    <svg className="hype-meter-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <linearGradient id="meterGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#00FF88" />
-          <stop offset="50%" stopColor="#FFCC00" />
-          <stop offset="100%" stopColor="#FF4D4D" />
-        </linearGradient>
-      </defs>
-
-      <path d={arcPath(startAngle, 0, radius)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" strokeLinecap="round" />
-
-      <path
-        d={arcPath(startAngle, animated ? scoreAngle : startAngle, radius)}
-        fill="none"
-        stroke="url(#meterGrad)"
-        strokeWidth="10"
-        strokeLinecap="round"
-        style={{ transition: 'all 1.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
-      />
-
-      <line x1={cx} y1={cy} x2={nx} y2={ny}
-        stroke={getColor(score)} strokeWidth="2" strokeLinecap="round"
-        style={{ transition: 'all 1.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
-      />
-      <circle cx={cx} cy={cy} r="3" fill={getColor(score)} />
-
-      <text x={cx - radius - 3} y={cy + 3} fill="rgba(255,255,255,0.25)" fontSize="8" textAnchor="end" fontFamily="Inter">0</text>
-      <text x={cx} y={cy - radius - 5} fill="rgba(255,255,255,0.25)" fontSize="8" textAnchor="middle" fontFamily="Inter">50</text>
-      <text x={cx + radius + 3} y={cy + 3} fill="rgba(255,255,255,0.25)" fontSize="8" textAnchor="start" fontFamily="Inter">100</text>
-
-      <text x={cx} y={cy - 5} fill={getColor(score)} fontSize="20" textAnchor="middle" fontFamily="Inter" fontWeight="700">
-        {score}
-      </text>
-      <text x={cx} y={cy + 8} fill="rgba(255,255,255,0.25)" fontSize="7" textAnchor="middle" fontFamily="Inter" letterSpacing="1.5">
-        HYPE SCORE
-      </text>
-    </svg>
-  );
-}
-
-function Timeline({ events }) {
-  return (
-    <div className="timeline-container">
-      {events.map((event, i) => (
-        <div
-          key={i}
-          className="timeline-item"
-          style={{ animationDelay: `${i * 0.12}s` }}
-        >
-          <span className="timeline-time">{event.time}</span>
-          <span className={`timeline-dot ${event.type}`}></span>
-          <span className="timeline-event">{event.event}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import React from 'react';
 
 export default function BottomPanel({ coin }) {
+  if (!coin) return null;
+
+  // Derive stable values
+  const isBullish = coin.sentiment === 'positive';
+  const trendPercent = Math.abs(coin.hypeScore - 40).toFixed(1);
+  const meterOffset = 125 - (125 * coin.hypeScore) / 100;
+  
+  let zoneText = "Stable Reentry";
+  let megaText = "MODERATE";
+  if (coin.hypeScore > 80) { zoneText = "Breakout Imminent"; megaText = "MEGA"; }
+  else if (coin.hypeScore > 60) { zoneText = "Accumulation"; megaText = "HIGH"; }
+  else if (coin.hypeScore < 30) { zoneText = "Cooling Off"; megaText = "LOW"; }
+
+  const timeline = coin.timeline || [
+    { time: '10m ago', event: 'Social volume: 15 mentions/hr', type: 'positive' },
+    { time: '1h ago', event: 'Network upgrade estimated in 4h 20m', type: 'neutral' }
+  ];
+
+  // Helper to dynamically generate the bottom panel graph exactly bounded to limits
+  const generateDynamicPath = (history) => {
+    if (!history || !Array.isArray(history) || history.length === 0) return { path: '', fill: '' };
+    
+    const max = Math.max(...history);
+    const min = Math.min(...history);
+    const range = max - min || 1;
+    
+    // Bounds limit matching viewBox="0 0 350 100" (Y is down)
+    const dx = 350 / (history.length - 1 || 1);
+    
+    const points = history.map((val, i) => {
+      const x = i * dx;
+      const y = 90 - ((val - min) / range) * 80; // normalize 10->90 to avoid clipping
+      return { x, y };
+    });
+
+    if (points.length < 2) return { path: '', fill: '' };
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+        // Simple line drawing to avoid bezier overshoot bounds since User complained about cutting off
+        path += ` L ${points[i].x} ${points[i].y}`;
+    }
+    
+    // Fill path completes via bottom bounds
+    const fill = `${path} L 350 100 L 0 100 Z`;
+    
+    return { path, fill };
+  };
+
+  const graph = generateDynamicPath(coin.priceHistory);
+
   return (
-    <div className="bottom-panel">
-      <div className="bottom-section">
-        <div className="bottom-section-title">
-          Trend Analysis
+    <>
+      <div className="col-span-5 bg-surface-container rounded-xl p-5 relative overflow-hidden group hover:border-primary/20 transition-all border border-transparent">
+        <div className="flex justify-between items-center mb-0">
+          <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase">Sentiment Trend ({coin.symbol})</h3>
+          <span className={`text-[9px] font-bold px-2 py-1 rounded ${isBullish ? 'text-[#00fd87] bg-[#00fd87]/10' : 'text-[#ff716c] bg-[#ff716c]/10'}`}>
+            {isBullish ? '+' : '-'}{trendPercent}% {isBullish ? 'BULLISH' : 'BEARISH'}
+          </span>
         </div>
-        <div className="trend-graph-container">
-          <TrendGraph coin={coin} />
+        <div className="h-28 w-full relative mt-0.5">
+          <svg className="w-full h-full overflow-hidden" preserveAspectRatio="none" viewBox="0 0 350 100">
+            {graph.path && (
+              <>
+                <path 
+                  className={isBullish ? "text-[#00fd87] drop-shadow-[0_0_8px_rgba(0,253,135,0.6)]" : "text-[#ff716c] drop-shadow-[0_0_8px_rgba(255,113,108,0.6)]"} 
+                  d={graph.path} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="3" 
+                  strokeLinejoin="round"
+                />
+                <path 
+                  className={isBullish ? "text-[#00fd87]/10" : "text-[#ff716c]/10"} 
+                  d={graph.fill} 
+                  fill="currentColor" 
+                  stroke="none" 
+                />
+              </>
+            )}
+          </svg>
         </div>
       </div>
 
-      <div className="bottom-section">
-        <div className="bottom-section-title">
-          Hype Meter
+      <div className="col-span-3 bg-surface-container rounded-xl p-5 relative border border-white/5 flex flex-col justify-between">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase">Hype Meter</h3>
+          <span className={`text-[9px] font-bold uppercase ${isBullish ? 'text-[#00fd87]' : 'text-[#7ee6ff]'}`}>{zoneText}</span>
         </div>
-        <div className="hype-meter-container">
-          <HypeMeter score={coin.hypeScore} />
+        <div className="relative w-32 h-16 mx-auto mt-4">
+          <svg className="w-full h-full overflow-visible" viewBox="0 0 100 50">
+            <path className="text-surface-container-highest" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="8"></path>
+            <path 
+              className={coin.hypeScore < 40 ? "text-[#ff716c] drop-shadow-[0_0_8px_rgba(255,113,108,0.5)]" : "text-[#00fd87] drop-shadow-[0_0_8px_rgba(0,253,135,0.5)]"} 
+              d="M 10 50 A 40 40 0 0 1 90 50" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeDasharray="125" 
+              strokeDashoffset={meterOffset} 
+              strokeLinecap="round" 
+              strokeWidth="8"
+              style={{ transition: 'stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
+            />
+          </svg>
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
+            <div className="font-headline font-black text-2xl text-on-surface tracking-tighter">{megaText}</div>
+            <div className={`text-[8px] tracking-widest uppercase mt-1 ${isBullish ? 'text-[#00fd87]' : 'text-[#7ee6ff]'}`}>Score: {coin.hypeScore}</div>
+          </div>
         </div>
       </div>
 
-      <div className="bottom-section">
-        <div className="bottom-section-title">
-          Event Timeline
+      <div className="col-span-4 bg-surface-container rounded-xl p-5 border border-white/5 overflow-hidden flex flex-col">
+        <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase mb-4">Event Timeline</h3>
+        <div className="space-y-4 relative before:absolute before:left-[3px] before:top-2 before:bottom-2 before:w-[2px] before:bg-surface-container-highest flex-1 overflow-y-auto pr-2">
+          {timeline.map((item, idx) => (
+            <div key={idx} className={`relative pl-4 ${idx > 0 ? 'opacity-50' : ''}`}>
+              <div className={`absolute left-[-2px] top-1.5 w-3 h-3 rounded-full ${idx === 0 ? 'bg-[#00fd87] shadow-[0_0_8px_rgba(0,253,135,0.6)]' : 'bg-outline'}`}></div>
+              <div className="text-[11px] text-on-surface leading-snug">
+                {idx === 0 ? (
+                  <>Trending activity: <span className="font-bold text-[#00fd87]">{item.event}</span></>
+                ) : (
+                  item.event
+                )}
+              </div>
+              <div className="text-[9px] text-outline tracking-wider mt-1">{item.time}</div>
+            </div>
+          ))}
         </div>
-        <Timeline events={coin.timeline} />
       </div>
-    </div>
+    </>
   );
 }

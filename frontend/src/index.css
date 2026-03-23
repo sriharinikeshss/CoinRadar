@@ -1,28 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 @import "tailwindcss";
 
 /* ================================
-   CUSTOM THEME TOKENS
+   CUSTOM THEME TOKENS (Tailwind v4)
    ================================ */
 @theme {
-  --color-bg-darkest: #0D0D0D;
-  --color-bg-dark: #1A1A1A;
-  --color-bg-card: #141414;
-  --color-bg-card-hover: #1E1E1E;
-  --color-bg-surface: rgba(255, 255, 255, 0.03);
+  --color-on-error: #490006;
+  --color-tertiary-container: #00dcff;
+  --color-on-background: #ffffff;
+  --color-background: #0e0e0e;
+  --color-surface-dim: #0e0e0e;
+  --color-error-container: #9f0519;
+  --color-surface-container-highest: #262626;
+  --color-primary-fixed: #00fd87;
+  --color-on-tertiary-fixed-variant: #005361;
+  --color-outline: #777575;
+  --color-primary: #a4ffb9;
+  --color-error-dim: #d7383b;
+  --color-surface-bright: #2c2c2c;
+  --color-inverse-on-surface: #565554;
+  --color-tertiary-fixed-dim: #00cdee;
+  --color-on-secondary-fixed-variant: #5c5b5b;
+  --color-on-error-container: #ffa8a3;
+  --color-surface-container-lowest: #000000;
+  --color-on-primary-fixed: #004621;
+  --color-on-tertiary: #005361;
+  --color-surface-container-high: #201f1f;
+  --color-secondary-fixed: #e5e2e1;
+  --color-on-surface-variant: #adaaaa;
+  --color-secondary: #e5e2e1;
+  --color-on-primary: #006532;
+  --color-primary-container: #00fd87;
+  --color-on-secondary-container: #d2d0cf;
+  --color-primary-dim: #00ed7e;
+  --color-tertiary: #7ee6ff;
+  --color-surface: #0e0e0e;
+  --color-inverse-surface: #fcf8f8;
+  --color-on-secondary: #525151;
+  --color-secondary-fixed-dim: #d7d4d3;
+  --color-on-tertiary-fixed: #00333d;
+  --color-surface-container-low: #131313;
+  --color-secondary-dim: #d7d4d3;
+  --color-inverse-primary: #006e37;
+  --color-on-primary-fixed-variant: #006632;
+  --color-outline-variant: #494847;
+  --color-primary-fixed-dim: #00ed7e;
+  --color-surface-container: #1a1919;
+  --color-secondary-container: #474646;
+  --color-on-surface: #ffffff;
+  --color-error: #ff716c;
+  --color-surface-tint: #a4ffb9;
+  --color-on-secondary-fixed: #403f3f;
+  --color-on-tertiary-container: #004956;
+  --color-on-primary-container: #005b2c;
+  --color-tertiary-dim: #00cdee;
+  --color-tertiary-fixed: #00dcff;
+  --color-surface-variant: #262626;
 
-  --color-neon-green: #00FF88;
-  --color-soft-green: #00C46A;
-  --color-neon-red: #FF4D4D;
-  --color-neon-yellow: #FFCC00;
-  --color-neon-blue: #00AAFF;
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
 
-  --color-text-primary: #E8E8F0;
-  --color-text-secondary: rgba(232, 232, 240, 0.6);
-  --color-text-dim: rgba(232, 232, 240, 0.35);
-
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-glass: rgba(255, 255, 255, 0.08);
-  --color-border-green: rgba(0, 255, 136, 0.2);
+  --radius-DEFAULT: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
 }
 
 /* ================================
@@ -126,4 +169,14 @@
 @keyframes glowPulse {
   0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 136, 0.2); }
   50% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.35); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }

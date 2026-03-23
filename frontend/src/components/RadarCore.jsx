@@ -1,179 +1,217 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const RadarWrapper = styled.div`
+const RadarContainer = styled.div`
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 
-  .radar-visual {
+  .radar-box {
     position: relative;
-    width: 280px;
-    height: 280px;
-    background: #141414;
-    border-radius: 50%;
-    box-shadow: inset 0px 0px 12px rgba(0, 255, 136, 0.15);
-    border: 1px solid rgba(0, 255, 136, 0.25);
+    width: 360px;
+    height: 360px;
+    background: #0A0A0A;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 253, 135, 0.02);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
   }
 
-  .radar-visual::before {
-    content: "";
+  /* Grid Lines */
+  .grid-lines {
     position: absolute;
-    inset: 32px;
-    background: transparent;
-    border: 1px solid rgba(0, 255, 136, 0.15);
-    border-radius: 50%;
-    box-shadow: inset 0px 0px 5px rgba(0, 255, 136, 0.1);
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 45px 45px;
+    background-position: center center;
+    pointer-events: none;
   }
 
-  .radar-visual::after {
-    content: "";
+  /* Center Axis Cross */
+  .axis-lines {
     position: absolute;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: 1px solid rgba(0, 255, 136, 0.12);
-    box-shadow: inset 0px 0px 3px rgba(0, 255, 136, 0.08);
+    inset: 0;
+    pointer-events: none;
+  }
+  .axis-lines::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .axis-lines::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.08);
   }
 
+  /* Concentric Circles */
+  .concentric-circle-1 {
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.05);
+    pointer-events: none;
+  }
+  .concentric-circle-2 {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+  }
+
+  /* Radar Sweep Wedge */
   .radar-sweep {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 100%;
-    height: 100%;
-    background: transparent;
-    transform-origin: top left;
-    animation: radarSpin 2s linear infinite;
-    box-shadow: -40px -120px 50px -80px rgba(0, 255, 136, 0.4);
-    border-top: 2px solid rgba(0, 196, 106, 0.6);
+    width: 400px;
+    height: 400px;
+    transform-origin: 0 0;
+    background: conic-gradient(from 180deg at 0% 0%, rgba(0, 253, 135, 0) 0deg, rgba(0, 253, 135, 0.15) 35deg, rgba(0, 253, 135, 0.6) 45deg, rgba(0, 253, 135, 0) 46deg);
+    animation: radarSpin 4s linear infinite;
+    pointer-events: none;
+    z-index: 1;
   }
 
   @keyframes radarSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
+  /* Center Dot */
   .radar-center-dot {
     position: absolute;
     width: 6px;
     height: 6px;
-    background: #00FF88;
+    background: #00fd87;
     border-radius: 50%;
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+    box-shadow: 0 0 12px rgba(0, 253, 135, 0.8), 0 0 24px rgba(0, 253, 135, 0.4);
     z-index: 5;
   }
 
+  /* Coin Points */
   .coin-dot {
     width: 8px;
     height: 8px;
     position: absolute;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.9);
-    box-shadow: inset 0px 0px 10px 2px rgba(0, 255, 182, 0.5),
-      0px 0px 10px 2px rgba(0, 255, 135, 0.3);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     z-index: 10;
-    animation: dotPulse 3s ease infinite;
+  }
+
+  .coin-dot.positive {
+    background: #00fd87;
+    box-shadow: 0 0 10px rgba(0, 253, 135, 0.6);
+  }
+  .coin-dot.neutral {
+    background: #7ee6ff;
+    box-shadow: 0 0 10px rgba(126, 230, 255, 0.6);
+  }
+  .coin-dot.negative {
+    background: #ff716c;
+    box-shadow: 0 0 10px rgba(255, 113, 108, 0.6);
   }
 
   .coin-dot:hover {
-    transform: scale(1.8);
-    box-shadow: inset 0px 0px 10px 2px rgba(0, 255, 182, 0.8),
-      0px 0px 20px 4px rgba(0, 255, 135, 0.6);
+    transform: scale(1.6);
+    box-shadow: 0 0 15px currentColor, 0 0 30px currentColor;
+    z-index: 20;
   }
 
   .coin-dot.selected {
-    width: 10px;
-    height: 10px;
-    background: #00FF88;
-    box-shadow: 0 0 15px rgba(0, 255, 136, 0.8);
-  }
-
-  .coin-dot.negative {
-    background: rgba(255, 77, 77, 0.9);
-    box-shadow: inset 0px 0px 10px 2px rgba(255, 77, 77, 0.5),
-      0px 0px 10px 2px rgba(255, 77, 77, 0.3);
-  }
-
-  .coin-dot.neutral {
-    background: rgba(255, 204, 0, 0.9);
-    box-shadow: inset 0px 0px 10px 2px rgba(255, 204, 0, 0.5),
-      0px 0px 10px 2px rgba(255, 204, 0, 0.3);
-  }
-
-  @keyframes dotPulse {
-    0%, 100% {
-      opacity: 0.7;
-    }
-    50% {
-      opacity: 1;
-    }
+    width: 12px;
+    height: 12px;
+    transform: scale(1.2);
+    box-shadow: 0 0 20px currentColor;
+    z-index: 15;
   }
 
   .coin-label {
     position: absolute;
-    font-size: 9px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.7);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
     letter-spacing: 0.5px;
     pointer-events: none;
     white-space: nowrap;
-    text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+    z-index: 15;
   }
 
+  /* Tooltip */
   .coin-tooltip {
     position: absolute;
-    background: rgba(20, 20, 20, 0.95);
-    border: 1px solid rgba(0, 255, 136, 0.25);
-    border-radius: 8px;
-    padding: 8px 12px;
+    background: rgba(14, 14, 14, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 10px 14px;
     z-index: 50;
     pointer-events: none;
-    animation: tooltipFade 0.2s ease;
-    backdrop-filter: blur(8px);
-    min-width: 100px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    min-width: 120px;
+    transform: translate(-50%, -100%);
+    margin-top: -12px;
   }
 
-  .coin-tooltip .tt-name {
-    font-size: 12px;
+  .tt-name {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 13px;
     font-weight: 700;
-    color: #E8E8F0;
-    margin-bottom: 2px;
+    color: #ffffff;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
   }
 
-  .coin-tooltip .tt-score {
+  .tt-score {
+    font-family: "Inter", sans-serif;
     font-size: 10px;
-    color: rgba(232, 232, 240, 0.6);
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
 
-  .coin-tooltip .tt-sentiment {
+  .tt-sentiment {
+    font-family: "Inter", sans-serif;
     font-size: 10px;
-    font-weight: 600;
-    margin-top: 2px;
-  }
-
-  @keyframes tooltipFade {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    font-weight: 700;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
 `;
 
 export default function RadarCore({ coins, selectedCoinId, onBubbleClick }) {
   const [hoveredCoin, setHoveredCoin] = React.useState(null);
-  const containerSize = 280;
-  const center = containerSize / 2;
-  const maxRadius = center * 0.78;
+  
+  // Coordinate calculations relative to the 360x360 box
+  const boxSize = 360;
+  const center = boxSize / 2;
+  const maxRadius = center * 0.8; // Coins stay slightly inside the edges
 
   const coinPositions = coins.map((coin) => {
-    const distance = maxRadius * (1 - coin.hypeScore / 120);
+    const distance = maxRadius * (1 - coin.hypeScore / 100);
     const angleRad = (coin.angle * Math.PI) / 180;
     const x = center + distance * Math.cos(angleRad);
     const y = center + distance * Math.sin(angleRad);
@@ -181,9 +219,14 @@ export default function RadarCore({ coins, selectedCoinId, onBubbleClick }) {
   });
 
   return (
-    <RadarWrapper>
-      <div className="radar-visual">
-        <span className="radar-sweep" />
+    <RadarContainer>
+      <div className="radar-box">
+        <div className="grid-lines" />
+        <div className="axis-lines" />
+        <div className="concentric-circle-1" />
+        <div className="concentric-circle-2" />
+        
+        <div className="radar-sweep" />
         <div className="radar-center-dot" />
 
         {coinPositions.map((coin) => (
@@ -191,8 +234,9 @@ export default function RadarCore({ coins, selectedCoinId, onBubbleClick }) {
             <div
               className={`coin-dot ${coin.sentiment} ${selectedCoinId === coin.id ? 'selected' : ''}`}
               style={{
-                left: coin.x - 4,
-                top: coin.y - 4,
+                left: coin.x - (selectedCoinId === coin.id ? 6 : 4),
+                top: coin.y - (selectedCoinId === coin.id ? 6 : 4),
+                color: coin.sentiment === 'positive' ? '#00fd87' : coin.sentiment === 'negative' ? '#ff716c' : '#7ee6ff'
               }}
               onClick={() => onBubbleClick(coin.id)}
               onMouseEnter={() => setHoveredCoin(coin)}
@@ -201,37 +245,38 @@ export default function RadarCore({ coins, selectedCoinId, onBubbleClick }) {
             <span
               className="coin-label"
               style={{
-                left: coin.x + 10,
+                left: coin.x + 12,
                 top: coin.y - 6,
               }}
             >
               {coin.symbol}
             </span>
+            
+            {/* Tooltip renders if this coin is hovered */}
+            {hoveredCoin?.id === coin.id && (
+              <div
+                className="coin-tooltip"
+                style={{
+                  left: coin.x,
+                  top: coin.y,
+                }}
+              >
+                <div className="tt-name">{hoveredCoin.name}</div>
+                <div className="tt-score">SCORE: {hoveredCoin.hypeScore}</div>
+                <div
+                  className="tt-sentiment"
+                  style={{
+                    color: hoveredCoin.sentiment === 'positive' ? '#00fd87' :
+                           hoveredCoin.sentiment === 'negative' ? '#ff716c' : '#7ee6ff'
+                  }}
+                >
+                  {hoveredCoin.sentiment}
+                </div>
+              </div>
+            )}
           </React.Fragment>
         ))}
-
-        {hoveredCoin && (
-          <div
-            className="coin-tooltip"
-            style={{
-              left: Math.min(hoveredCoin.x + 16, containerSize - 120),
-              top: Math.max(hoveredCoin.y - 30, 10),
-            }}
-          >
-            <div className="tt-name">{hoveredCoin.name}</div>
-            <div className="tt-score">Hype: {hoveredCoin.hypeScore}/100</div>
-            <div
-              className="tt-sentiment"
-              style={{
-                color: hoveredCoin.sentiment === 'positive' ? '#00FF88' :
-                       hoveredCoin.sentiment === 'negative' ? '#FF4D4D' : '#FFCC00'
-              }}
-            >
-              {hoveredCoin.sentiment.toUpperCase()}
-            </div>
-          </div>
-        )}
       </div>
-    </RadarWrapper>
+    </RadarContainer>
   );
 }
