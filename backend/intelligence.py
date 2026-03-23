@@ -179,36 +179,47 @@ def _generate_insight(
     pump_score: float,
     mentions: int,
     momentum: str,
+    tweets: list[str] | None = None
 ) -> str:
-    """Generate a signal-aware, coin-specific AI insight string."""
-    if spike_detected and momentum == "rising":
-        return (
-            f"{coin} is gaining traction with a sudden spike in mentions "
-            f"and rising momentum — potential early pump signal"
+    """Generate a signal-aware, coin-specific AI insight string using Groq LLM."""
+    tweets = tweets or []
+    
+    # Fast path: Rule-based string for low-priority coins to save API latency
+    if pump_score < 60:
+        if momentum == "rising":
+            return f"{coin} score is climbing with {mentions} mentions — momentum building, keep on radar"
+        if sentiment < -0.1:
+            return f"{coin} is seeing negative sentiment — possible sell pressure or risk"
+        return f"{coin} activity is stable with moderate sentiment — no strong signal yet"
+
+    # Slow path: Dynamic Groq LLM Generation for high-value breakout targets
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return f"{coin} is gaining traction with a sudden spike in mentions and rising momentum — potential early pump signal"
+        
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        context = f"Recent posts: {' | '.join(tweets[:3])}" if tweets else "No recent posts available."
+        
+        prompt = f"""You are a crypto trading AI. Analyze this meme coin data and provide a SINGLE short, punchy, actionable sentence (max 15 words) explaining the hype.
+Coin: {coin}
+Score: {pump_score:.1f}/100
+Momentum: {momentum}
+Spike Detected: {spike_detected}
+{context}
+Focus on the why. Do not use hashtags or emojis. Start with the coin name."""
+
+        completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_completion_tokens=30,
         )
-    if sentiment > 0.3 and mentions > 5:
-        return (
-            f"{coin} shows strong bullish sentiment across {mentions} mentions "
-            f"— community confidence is high"
-        )
-    if sentiment < -0.1:
-        return (
-            f"{coin} is seeing negative sentiment — possible sell pressure or risk"
-        )
-    if spike_detected:
-        return (
-            f"{coin} mention spike detected ({mentions} mentions) "
-            f"but sentiment is neutral — watch for breakout"
-        )
-    if momentum == "rising":
-        return (
-            f"{coin} score is climbing with {mentions} mentions "
-            f"— momentum building, keep on radar"
-        )
-    return (
-        f"{coin} activity is stable with moderate sentiment "
-        f"— no strong signal yet"
-    )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[intelligence] Groq API Failed for {coin}: {e}")
+        return f"{coin} shows strong bullish sentiment across {mentions} mentions"
 
 
 def _classify_signal(pump_score: float, spike_detected: bool) -> str:
@@ -384,9 +395,9 @@ def analyze_coin(payload: dict) -> dict:
     else:
         sentiment_label = "Neutral"
 
-    # 6. AI insight (signal-aware)
+    # 6. AI insight (signal-aware & dynamic via Groq)
     ai_insight = _generate_insight(
-        coin, sentiment, spike_detected, pump_score, mention_count_now, momentum
+        coin, sentiment, spike_detected, pump_score, mention_count_now, momentum, tweets
     )
 
     # 7. Confidence + Signal type

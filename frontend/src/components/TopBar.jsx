@@ -1,6 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function TopBar({ searchQuery, onSearchChange, onAddCoin }) {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeStr = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = time.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase();
+
   return (
     <header className="fixed top-0 right-0 left-20 z-40 flex justify-between items-center px-8 h-16 bg-[#0e0e0e]/80 backdrop-blur-xl border-b border-white/5">
       <div className="flex items-center gap-8 flex-1">
@@ -25,19 +35,18 @@ export default function TopBar({ searchQuery, onSearchChange, onAddCoin }) {
         </button>
         <button 
           className="flex items-center gap-2 bg-[#5865F2]/20 text-[#c1c6fb] border border-[#5865F2]/50 px-4 py-2 rounded-xl font-headline font-bold text-[10px] tracking-widest uppercase hover:bg-[#5865F2]/40 transition-all cursor-pointer shadow-[0_0_15px_rgba(88,101,242,0.15)] hover:shadow-[0_0_20px_rgba(88,101,242,0.3)]"
-          onClick={() => alert("Simulating redirect to CoinRadar Discord Alerts Webhook Server...")}
+          onClick={() => window.open("https://discord.gg/ZGddm2GhKS", "_blank")}
         >
           <span className="material-symbols-outlined text-[14px]">webhook</span>
           Live Discord Alerts
         </button>
-        <div className="flex items-center gap-3 ml-4 border-l border-white/10 pl-6">
-          <span className="material-symbols-outlined text-outline hover:text-primary cursor-pointer transition-colors">tune</span>
-          <div className="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-white/10 cursor-pointer hover:border-primary/50 transition-colors">
-            <img 
-              alt="User Profile" 
-              className="w-full h-full object-cover" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOyo6xOTCuIKXVj1cMsXw2AXJj_0kcAV3C4m0M9aSIN1NTDD37oM_BzYY6K3WB-G-VOcbiTIMRn1ilX_Uq7pZr4daQaFZfbVaibxNSUZh4Ip2UMOuZ-oLfdtzqQwnW1l0oX5lNkI2kdG5Y61jVQhnqOQ8Xn8SSv_kppqqHEamYL4p-x9KR420VyUG5o4oKWvrAo93B0TFuqeUvI0D7BHnkddl_1Sf4lTwlnV0-BK2LNmWg0cKyugW4Ao3AlG9y_xIwQWDTTJcyDYc"
-            />
+        <div className="flex flex-col items-end justify-center ml-4 border-l border-white/10 pl-6 h-10 w-24">
+          <div className="text-primary font-mono text-[13px] font-bold tracking-widest flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            {timeStr}
+          </div>
+          <div className="text-outline font-label text-[9px] tracking-widest uppercase mt-0.5">
+            {dateStr}
           </div>
         </div>
       </div>

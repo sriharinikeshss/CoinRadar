@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
-import useTokenData from './hooks/useTokenData';
+import useTokenData, { transformToken } from './hooks/useTokenData';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import LeftPanel from './components/LeftPanel';
@@ -10,6 +10,9 @@ import BottomPanel from './components/BottomPanel';
 import AIAssistant from './components/AIAssistant';
 import CoinOverlay from './components/CoinOverlay';
 import AddCoinModal from './components/AddCoinModal';
+import DataModule from './components/DataModule';
+import LogsModule from './components/LogsModule';
+import ConfigModule from './components/ConfigModule';
 
 function App() {
   // Live data from backend (falls back to mock if backend is down)
@@ -58,12 +61,35 @@ function App() {
     setShowOverlay(true);
   };
 
-  const handleAddCoin = (newCoin, newInsight) => {
-    setCoinsData(prev => [...(prev || []), newCoin]);
-    setInsightsData(prev => [...(prev || []), newInsight]);
-    setIsAddCoinOpen(false);
-    setToastMessage(`${newCoin.symbol} added to radar`);
-    setTimeout(() => setToastMessage(null), 3000);
+  const handleAddCoin = async (symbol, name) => {
+    try {
+      setToastMessage(`Scanning network for ${symbol}...`);
+      const res = await fetch('http://127.0.0.1:8001/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const token = { ...data, name: data.name || name };
+      const newCoinState = transformToken(token, currentCoins.length, currentCoins.length + 1);
+      
+      const newInsight = {
+        coinId: newCoinState.id,
+        text: newCoinState._ai_insight || `Started tracking ${symbol}. ${newCoinState.sentiment} activity detected.`
+      };
+      
+      setCoinsData(prev => [...(prev || []), newCoinState]);
+      setInsightsData(prev => [...(prev || []), newInsight]);
+      setIsAddCoinOpen(false);
+      
+      setToastMessage(`${symbol} successfully tracked!`);
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (e) {
+      setToastMessage(`Failed to track ${symbol}: ${e.message}`);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
   };
 
   // ... (previous state logic remains unchanged) ...
@@ -143,15 +169,21 @@ function App() {
               <BottomPanel coin={selectedCoin} />
             </footer>
           </>
+        ) : activeTab === 'DATA' ? (
+          <DataModule coins={currentCoins} searchQuery={searchQuery} />
+        ) : activeTab === 'LOGS' ? (
+          <LogsModule alerts={alerts} />
+        ) : activeTab === 'CONF' ? (
+          <ConfigModule />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full w-full">
             <span className="material-symbols-outlined text-[64px] text-outline mb-6 opacity-20" style={{ fontVariationSettings: "'FILL' 0, 'wght' 200" }}>
-              {activeTab === 'PORT' ? 'account_balance_wallet' : activeTab === 'ALRT' ? 'notifications' : 'settings'}
+              error
             </span>
             <h2 className="text-2xl font-headline font-black text-on-surface tracking-widest uppercase bg-clip-text text-transparent bg-gradient-to-r from-[#00fd87] to-[#7ee6ff] mb-2">
-              {activeTab} MODULE
+              UNKNOWN MODULE
             </h2>
-            <p className="text-outline mt-2 tracking-wider text-sm font-label uppercase">Under active synchronization with blockchain relays.</p>
+            <p className="text-outline mt-2 tracking-wider text-sm font-label uppercase">Critical system failure: Module not found.</p>
             <button 
               onClick={() => setActiveTab('DASH')}
               className="mt-8 px-6 py-2 rounded-full border border-white/10 text-xs font-bold font-headline tracking-widest uppercase hover:bg-white/5 hover:text-[#00fd87] transition-all"

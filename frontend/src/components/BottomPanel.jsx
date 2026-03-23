@@ -113,21 +113,23 @@ export default function BottomPanel({ coin }) {
       </div>
 
       <div className="col-span-4 bg-surface-container rounded-xl p-5 border border-white/5 overflow-hidden flex flex-col">
-        <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase mb-4">Event Timeline</h3>
-        <div className="space-y-4 relative before:absolute before:left-[3px] before:top-2 before:bottom-2 before:w-[2px] before:bg-surface-container-highest flex-1 overflow-y-auto pr-2">
-          {timeline.map((item, idx) => (
-            <div key={idx} className={`relative pl-4 ${idx > 0 ? 'opacity-50' : ''}`}>
-              <div className={`absolute left-[-2px] top-1.5 w-3 h-3 rounded-full ${idx === 0 ? 'bg-[#00fd87] shadow-[0_0_8px_rgba(0,253,135,0.6)]' : 'bg-outline'}`}></div>
-              <div className="text-[11px] text-on-surface leading-snug">
-                {idx === 0 ? (
-                  <>Trending activity: <span className="font-bold text-[#00fd87]">{item.event}</span></>
-                ) : (
-                  item.event
-                )}
+        <h3 className="font-headline text-[10px] font-bold tracking-[0.2em] text-outline uppercase mb-4 shrink-0">Event Timeline</h3>
+        <div className="relative before:absolute before:left-[4px] before:top-2 before:bottom-2 before:w-[2px] before:bg-surface-container-highest flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="flex flex-col gap-3">
+            {timeline.slice(0, 4).map((item, idx) => (
+              <div key={idx} className="relative pl-5 group">
+                <div className={`absolute left-0 top-[6px] w-[10px] h-[10px] rounded-full border-[2px] border-surface-container ${idx === 0 ? 'bg-primary shadow-[0_0_8px_rgba(0,253,135,0.6)] z-10' : 'bg-outline/50 z-10'}`}></div>
+                <div className={`text-[11px] leading-snug font-medium ${idx === 0 ? 'text-on-surface' : 'text-outline/80'}`}>
+                  {idx === 0 ? (
+                    <span className="font-bold text-primary">{item.event}</span>
+                  ) : (
+                    item.event
+                  )}
+                </div>
+                <div className="text-[9px] text-outline/50 tracking-wider mt-0.5">{item.time}</div>
               </div>
-              <div className="text-[9px] text-outline tracking-wider mt-1">{item.time}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </>

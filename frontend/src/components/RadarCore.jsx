@@ -96,6 +96,26 @@ const RadarContainer = styled.div`
     to { transform: rotate(360deg); }
   }
 
+  /* Radar Ripple Animation */
+  .radar-ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 253, 135, 0);
+    transform: translate(-50%, -50%);
+    animation: rippleAnim 6s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  @keyframes rippleAnim {
+    0% { width: 0; height: 0; border-color: rgba(0, 253, 135, 0.8); }
+    100% { width: 360px; height: 360px; border-color: rgba(0, 253, 135, 0); }
+  }
+
   /* Center Dot */
   .radar-center-dot {
     position: absolute;
@@ -144,6 +164,22 @@ const RadarContainer = styled.div`
     transform: scale(1.2);
     box-shadow: 0 0 20px currentColor;
     z-index: 15;
+  }
+
+  /* Pulsating Ping Effect */
+  .coin-dot::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: inherit;
+    opacity: 0.6;
+    animation: pingAnim 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    z-index: -1;
+  }
+
+  @keyframes pingAnim {
+    75%, 100% { transform: scale(2.5); opacity: 0; }
   }
 
   .coin-label {
@@ -227,12 +263,12 @@ export default function RadarCore({ coins, selectedCoinId, onBubbleClick }) {
         <div className="concentric-circle-2" />
         
         <div className="radar-sweep" />
-        <div className="radar-ripple" />
-        <div className="radar-ripple" />
-        <div className="radar-ripple" />
-        <div className="radar-ripple" />
-        <div className="radar-ripple" />
-        <div className="radar-ripple" />
+        <div className="radar-ripple" style={{ animationDelay: '0s' }} />
+        <div className="radar-ripple" style={{ animationDelay: '1s' }} />
+        <div className="radar-ripple" style={{ animationDelay: '2s' }} />
+        <div className="radar-ripple" style={{ animationDelay: '3s' }} />
+        <div className="radar-ripple" style={{ animationDelay: '4s' }} />
+        <div className="radar-ripple" style={{ animationDelay: '5s' }} />
         <div className="radar-center-dot" />
 
         {coinPositions.map((coin) => (

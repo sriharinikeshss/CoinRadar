@@ -69,39 +69,40 @@ function generatePrediction(history, score) {
   });
 }
 
-// Generate timeline events from backend data
+// Generate timeline events from backend data to always show a clean 3-part story
 function generateTimeline(token) {
-  const events = [];
   const now = new Date();
   const fmt = (minsAgo) => {
     const d = new Date(now - minsAgo * 60000);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (token.spike_detected) {
-    events.push({ time: fmt(5), event: `${token.symbol} mention spike detected`, type: 'spike' });
-  }
+  let recentEvent = { time: fmt(2), event: `Social volume mapping updated (${token.mentions_1h}/hr)` };
   if (token.alert_triggered) {
-    events.push({ time: fmt(2), event: `🚨 PUMP ALERT — score ${token.pump_score}`, type: 'alert' });
+    recentEvent = { time: fmt(1), event: `🚨 PUMP ALERT — score ${token.pump_score.toFixed(1)}` };
+  } else if (token.spike_detected) {
+    recentEvent = { time: fmt(3), event: `${token.symbol} mention spike detected` };
+  } else if (token.pump_score >= 70) {
+    recentEvent = { time: fmt(5), event: 'Peak hype territory reached' };
   }
-  if (token.pump_score >= 80) {
-    events.push({ time: fmt(8), event: 'Peak hype territory reached', type: 'peak' });
+
+  let midEvent = { time: fmt(14), event: `Sentiment holding steady at ${token.sentiment_label}` };
+  if (token.sentiment_label === 'Bullish' || token.pump_score > 50) {
+    midEvent = { time: fmt(12), event: `Community accumulation phase identified` };
+  } else if (token.sentiment_label === 'Bearish') {
+    midEvent = { time: fmt(15), event: `Tracking mild bearish sentiment pressure` };
   }
-  if (token.pump_score >= 50) {
-    events.push({ time: fmt(15), event: `Social volume: ${token.mentions_1h} mentions/hr`, type: 'spike' });
-  }
-  // Always have at least one event
-  if (events.length === 0) {
-    events.push({ time: fmt(30), event: 'Monitoring social signals...', type: 'alert' });
-  }
-  return events;
+
+  const oldEvent = { time: fmt(45), event: `System began tracking $${token.symbol} on-chain` };
+
+  return [recentEvent, midEvent, oldEvent];
 }
 
 /**
  * Transform a single backend token object into the shape the
  * React components expect (matching mockData.js structure).
  */
-function transformToken(token, index, total) {
+export function transformToken(token, index, total) {
   const rawSymbol = token.symbol.replace('$', '');
   const meta = COIN_META[rawSymbol] || { name: rawSymbol, emoji: '🪙' };
   const score = Math.round(token.pump_score);

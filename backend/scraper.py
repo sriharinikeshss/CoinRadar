@@ -24,6 +24,8 @@ load_dotenv()
 
 # ─────────────────────── Configuration ───────────────────────
 
+USER_ADDED_COINS: set[str] = set()
+
 USE_REAL_DATA: bool = os.getenv("USE_REAL_DATA", "true").lower() in ("true", "1", "yes")
 
 SUBREDDITS = ["CryptoMoonShots", "memecoins"]
@@ -333,10 +335,12 @@ def build_token_list() -> list[dict]:
         print("[scraper] ⚠ No data at all — returning empty list")
         return []
 
-    # Ensure sticky coins are in the data (with baseline values if missing)
-    for sticky in STICKY_COINS:
-        if sticky not in reddit_data:
-            reddit_data[sticky] = {
+    # Ensure sticky and user-added coins are in the data (with baseline values if missing)
+    targets = set(STICKY_COINS) | USER_ADDED_COINS
+
+    for target in targets:
+        if target not in reddit_data:
+            reddit_data[target] = {
                 "mentions": 0,
                 "titles": [],
                 "history": [0] * 5,

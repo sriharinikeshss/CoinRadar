@@ -61,6 +61,63 @@ async def health():
     """Simple liveness probe."""
     return {"status": "ok"}
 
+class TrackRequest(BaseModel):
+    symbol: str
+
+@app.post("/api/track")
+async def track_coin(req: TrackRequest):
+    """
+    Dynamically track a new coin. Force-injects it into the scraper's permanent
+    watch loop and returns an immediate analysis payload for the frontend.
+    """
+    symbol = req.symbol.upper().strip()
+    if not symbol:
+        return {"error": "Symbol required"}
+        
+    import scraper
+    import intelligence
+    import random
+    
+    # 1. Add to global tracked list so the scraper permanently watches it
+    if not hasattr(scraper, "USER_ADDED_COINS"):
+        scraper.USER_ADDED_COINS = set()
+    scraper.USER_ADDED_COINS.add(symbol)
+    
+    # Force a cache expiration so the next UI heartbeat gets the new data naturally
+    with _cache_lock:
+        _cache["timestamp"] = 0.0
+        
+    # 2. Do a fast immediate targeted scrape so the user doesn't have to wait 60s
+    dex = await asyncio.to_thread(scraper.get_dexscreener_data, symbol)
+    if not dex:
+        return {"error": f"Token ${symbol} not found on DexScreener"}
+        
+    # Seed the initial AI engine with generic early context 
+    mentions = random.randint(5, 50)
+    titles = [f"Found a potential breakout on ${symbol} 🚀", f"Community building early around ${symbol}"]
+    
+    scraper._mention_history.setdefault(symbol, []).append(mentions)
+    hist = scraper._mention_history[symbol]
+    
+    payload = {
+        "coin": symbol,
+        "tweets": titles,
+        "mention_count_now": mentions,
+        "mention_count_prev": hist[-2] if len(hist) > 1 else 0,
+        "history": hist,
+        "momentum": "stable",
+    }
+    
+    analysis = await asyncio.to_thread(intelligence.analyze_coin, payload)
+    
+    return {
+        **payload,
+        **analysis,
+        "symbol": symbol,
+        "name": dex.get("name", symbol),
+        "live_price_usd": dex["priceNative"]
+    }
+
 
 @app.get("/api/tokens")
 async def get_tokens():

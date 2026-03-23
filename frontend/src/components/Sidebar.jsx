@@ -2,10 +2,10 @@ import React from 'react';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const tabs = [
-    { id: 'DASH', icon: 'grid_view' },
-    { id: 'PORT', icon: 'account_balance_wallet' },
-    { id: 'ALRT', icon: 'notifications' },
-    { id: 'SETT', icon: 'settings' }
+    { id: 'DASH', icon: 'radar' },
+    { id: 'DATA', icon: 'table_chart' },
+    { id: 'LOGS', icon: 'terminal' },
+    { id: 'CONF', icon: 'settings_input_component' }
   ];
 
   return (
@@ -29,11 +29,6 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
           </button>
         ))}
       </nav>
-      <div className="mt-auto mb-4">
-        <button className="p-[10px] rounded-full bg-surface-container-highest text-primary-container hover:bg-primary-container hover:text-on-primary-container transition-all flex items-center justify-center">
-          <span className="material-symbols-outlined leading-none">add</span>
-        </button>
-      </div>
     </aside>
   );
 };
