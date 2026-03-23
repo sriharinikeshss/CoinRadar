@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import './App.css';
 import { coins as initialCoins, aiInsights as initialInsights, alerts, defaultCoinId } from './data/mockData';
 import TopBar from './components/TopBar';
+import Sidebar from './components/Sidebar';
 import LeftPanel from './components/LeftPanel';
 import RadarCore from './components/RadarCore';
 import RightPanel from './components/RightPanel';
@@ -41,26 +42,26 @@ function App() {
     setCoinsData(prev => [...prev, newCoin]);
     setInsightsData(prev => [...prev, newInsight]);
     setIsAddCoinOpen(false);
-    
-    // Show toast
-    setToastMessage(`Successfully added ${newCoin.name}!`);
+    setToastMessage(`${newCoin.symbol} added to radar`);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
   return (
     <div className="app-container">
-      <TopBar 
-        searchQuery={searchQuery} 
+      <TopBar
+        searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onAddCoin={() => setIsAddCoinOpen(true)}
       />
 
-      <div className="main-content">
+      <Sidebar />
+
+      <div className="main-area">
         <LeftPanel
           coins={filteredCoins}
           selectedCoinId={selectedCoinId}
           onCoinSelect={handleCoinSelect}
-          searchQuery={searchQuery || ''}
+          searchQuery={searchQuery}
         />
 
         <div className="center-panel">
@@ -82,25 +83,22 @@ function App() {
           insight={selectedInsight}
           alerts={alerts}
         />
+
+        <BottomPanel coin={selectedCoin} />
       </div>
 
-      <BottomPanel coin={selectedCoin} />
-
       <AIAssistant />
-      
+
       {isAddCoinOpen && (
-        <AddCoinModal 
+        <AddCoinModal
           onClose={() => setIsAddCoinOpen(false)}
           onAdd={handleAddCoin}
           nextId={Math.max(...coinsData.map(c => c.id)) + 1}
         />
       )}
-      
-      {/* Toast Notification */}
+
       {toastMessage && (
-        <div className="success-toast">
-          {toastMessage}
-        </div>
+        <div className="success-toast">{toastMessage}</div>
       )}
     </div>
   );
