@@ -19,7 +19,7 @@ load_dotenv()
 # CONFIG
 # ──────────────────────────────────────────────
 
-SPIKE_THRESHOLD = 2.5          # current must be 2.5x rolling avg to count as spike
+SPIKE_THRESHOLD = 1.3          # current must be 1.3x rolling avg to count as spike
 ALERT_THRESHOLD = 85           # pump_score above this triggers Discord alert
 ROLLING_WINDOW  = 5            # number of historical data points for spike calc
 
@@ -158,60 +158,148 @@ def detect_spike(history: list, current: int) -> bool:
 
 
 # ──────────────────────────────────────────────
-# SECTION 4 — Discord Alert
+# SECTION 4 — Discord Alert (Multi-Signal Composite System)
 # ──────────────────────────────────────────────
 
-def _generate_insight(sentiment: float, spike_detected: bool, pump_score: float) -> str:
-    """Generate a short AI insight string for the output."""
-    parts = []
+# Per-coin cooldown tracking (prevent alert spam)
+_alert_cooldowns: dict[str, float] = {}
+ALERT_COOLDOWN = 300  # 5 minutes between alerts for same coin
 
-    if sentiment > 0.3:
-        parts.append("Strong bullish sentiment")
-    elif sentiment > 0:
-        parts.append("Mildly positive sentiment")
-    elif sentiment < -0.3:
-        parts.append("Bearish sentiment detected")
-    else:
-        parts.append("Neutral sentiment")
+# Per-cycle alert cap (prevent Discord flooding)
+MAX_ALERTS_PER_CYCLE = 5
+_alerts_this_cycle: int = 0
 
+import time as _time
+
+
+def _generate_insight(
+    coin: str,
+    sentiment: float,
+    spike_detected: bool,
+    pump_score: float,
+    mentions: int,
+    momentum: str,
+) -> str:
+    """Generate a signal-aware, coin-specific AI insight string."""
+    if spike_detected and momentum == "rising":
+        return (
+            f"{coin} is gaining traction with a sudden spike in mentions "
+            f"and rising momentum — potential early pump signal"
+        )
+    if sentiment > 0.3 and mentions > 5:
+        return (
+            f"{coin} shows strong bullish sentiment across {mentions} mentions "
+            f"— community confidence is high"
+        )
+    if sentiment < -0.1:
+        return (
+            f"{coin} is seeing negative sentiment — possible sell pressure or risk"
+        )
     if spike_detected:
-        parts.append("with a major social spike")
-    else:
-        parts.append("with stable social volume")
+        return (
+            f"{coin} mention spike detected ({mentions} mentions) "
+            f"but sentiment is neutral — watch for breakout"
+        )
+    if momentum == "rising":
+        return (
+            f"{coin} score is climbing with {mentions} mentions "
+            f"— momentum building, keep on radar"
+        )
+    return (
+        f"{coin} activity is stable with moderate sentiment "
+        f"— no strong signal yet"
+    )
 
-    if pump_score >= 85:
-        parts.append("— HIGH PUMP ALERT 🚨")
-    elif pump_score >= 60:
-        parts.append("— momentum building")
-    else:
-        parts.append("— low activity")
 
-    return " ".join(parts)
+def _classify_signal(pump_score: float, spike_detected: bool) -> str:
+    """Classify the signal strength for trader-style insight."""
+    if pump_score > 70 and spike_detected:
+        return "Strong Signal"
+    if pump_score > 60:
+        return "Early Signal"
+    return "Monitoring"
 
 
-def send_discord_alert(coin: str, score: float, sentiment: float, tweets: list, insight: str):
+def _get_confidence(pump_score: float) -> str:
+    """Return a confidence tag based on score."""
+    if pump_score > 70:
+        return "HIGH"
+    if pump_score > 50:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _check_composite_trigger(
+    pump_score: float,
+    spike_detected: bool,
+    momentum: str,
+    sentiment: float = 0.0,
+) -> tuple[bool, list[str]]:
     """
-    Send a rich embed to Discord via webhook.
-    Wrapped in try/except so it NEVER crashes the pipeline.
+    Multi-signal composite trigger.
+    Fires when ANY 2 of 4 conditions are met simultaneously.
+    Returns (triggered, list_of_reasons).
+    """
+    signals: list[str] = []
+    if pump_score > 50:
+        signals.append(f"High Score ({pump_score:.1f})")
+    if spike_detected:
+        signals.append("Spike Detected")
+    if momentum == "rising":
+        signals.append("Rising Momentum")
+    if sentiment > 0.2:
+        signals.append(f"Bullish Sentiment ({sentiment:.2f})")
+
+    triggered = len(signals) >= 2
+    print(f"[alert] 🔍 Composite check: {len(signals)} signals active {signals} → {'TRIGGERED' if triggered else 'no trigger'}")
+    return triggered, signals
+
+
+def send_discord_alert(
+    coin: str,
+    score: float,
+    sentiment: float,
+    tweets: list,
+    insight: str,
+    signals: list[str],
+    confidence: str,
+    signal_type: str,
+):
+    """
+    Send a rich, explainable embed to Discord via webhook.
+    Includes which signals triggered and confidence level.
     """
     if not DISCORD_WEBHOOK_URL:
-        return  # silently skip if no webhook configured
+        return
+
+    # Per-coin cooldown check
+    now = _time.time()
+    if coin in _alert_cooldowns and (now - _alert_cooldowns[coin]) < ALERT_COOLDOWN:
+        print(f"[alert] ⏳ {coin} on cooldown, skipping Discord alert")
+        return
+    _alert_cooldowns[coin] = now
 
     top_tweets = tweets[:3] if tweets else ["No tweets available"]
     tweet_text = "\n".join(f"• {t[:100]}" for t in top_tweets)
+    signals_text = " + ".join(signals)
 
-    # Color: green=pump, red=dump
-    color = 0x00FF88 if score >= 85 else 0xFF4444
+    # Color based on confidence
+    color = 0x00FF88 if confidence == "HIGH" else 0xFFCC00 if confidence == "MEDIUM" else 0xFF4444
 
     embed = {
         "embeds": [
             {
-                "title": f"🚨 PUMP ALERT — ${coin}",
-                "description": f"**Pump Score:** {score}/100\n**Sentiment:** {sentiment}\n**Insight:** {insight}",
+                "title": f"🚨 {signal_type}: ${coin}",
+                "description": (
+                    f"**Pump Score:** {score}/100\n"
+                    f"**Confidence:** {confidence}\n"
+                    f"**Signals:** {signals_text}\n"
+                    f"**Insight:** {insight}"
+                ),
                 "color": color,
                 "fields": [
                     {
-                        "name": "📝 Top Tweets",
+                        "name": "📝 Top Social Posts",
                         "value": tweet_text,
                         "inline": False,
                     }
@@ -224,9 +312,14 @@ def send_discord_alert(coin: str, score: float, sentiment: float, tweets: list, 
     }
 
     try:
-        requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=5)
-    except Exception:
-        pass  # never block the pipeline
+        resp = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=5)
+        if resp.status_code == 204:
+            print(f"[alert] ✅ Discord alert sent for ${coin}: {signals_text}")
+            _time.sleep(0.8)  # Respect Discord rate limits
+        else:
+            print(f"[alert] ❌ Discord webhook failed HTTP {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        print(f"[alert] ❌ Discord webhook exception: {e}")
 
 
 # ──────────────────────────────────────────────
@@ -243,17 +336,22 @@ def analyze_coin(payload: dict) -> dict:
         "tweets": ["gm pepe is mooning 🚀", ...],
         "mention_count_now": 1200,
         "mention_count_prev": 400,
-        "history": [300, 350, 380, 400, 420]
+        "history": [300, 350, 380, 400, 420],
+        "momentum": "rising"  // NEW — from scraper's persistent tracking
     }
 
     OUTPUT:
     {
         "coin": "PEPE",
-        "pump_score": 87.4,
+        "pump_score": 67.4,
         "sentiment": 0.62,
+        "sentiment_label": "Bullish",
         "spike_detected": True,
         "alert_triggered": True,
-        "ai_insight": "Strong bullish momentum ...",
+        "ai_insight": "PEPE is gaining traction...",
+        "confidence": "HIGH",
+        "signal_type": "Strong Signal",
+        "trigger_reasons": ["High Score (67.4)", "Spike Detected"],
         "timestamp": "2026-03-23T15:23:39Z"
     }
     """
@@ -262,6 +360,7 @@ def analyze_coin(payload: dict) -> dict:
     mention_count_now  = payload.get("mention_count_now", 0)
     mention_count_prev = payload.get("mention_count_prev", 0)
     history            = payload.get("history", [])
+    momentum           = payload.get("momentum", "stable")
 
     # 1. Sentiment
     sentiment = analyze_sentiment(tweets)
@@ -277,20 +376,54 @@ def analyze_coin(payload: dict) -> dict:
     # 4. Spike detection
     spike_detected = detect_spike(history, mention_count_now)
 
-    # 5. AI insight
-    ai_insight = _generate_insight(sentiment, spike_detected, pump_score)
+    # 5. Sentiment label
+    if sentiment > 0.15:
+        sentiment_label = "Bullish"
+    elif sentiment < -0.15:
+        sentiment_label = "Bearish"
+    else:
+        sentiment_label = "Neutral"
 
-    # 6. Alert
-    alert_triggered = pump_score > ALERT_THRESHOLD
-    if alert_triggered:
-        send_discord_alert(coin, pump_score, sentiment, tweets, ai_insight)
+    # 6. AI insight (signal-aware)
+    ai_insight = _generate_insight(
+        coin, sentiment, spike_detected, pump_score, mention_count_now, momentum
+    )
+
+    # 7. Confidence + Signal type
+    confidence = _get_confidence(pump_score)
+    signal_type = _classify_signal(pump_score, spike_detected)
+
+    # 8. Composite alert trigger (2-of-4 signals)
+    #    Skip on first run (no baseline yet) to prevent false spikes
+    global _alerts_this_cycle
+    if len(history) <= 1:
+        alert_triggered = False
+        trigger_reasons = []
+    else:
+        alert_triggered, trigger_reasons = _check_composite_trigger(
+            pump_score, spike_detected, momentum, sentiment
+        )
+
+    if alert_triggered and _alerts_this_cycle < MAX_ALERTS_PER_CYCLE:
+        send_discord_alert(
+            coin, pump_score, sentiment, tweets, ai_insight,
+            trigger_reasons, confidence, signal_type,
+        )
+        _alerts_this_cycle += 1
+    elif alert_triggered:
+        print(f"[alert] 🛑 Alert cap reached ({MAX_ALERTS_PER_CYCLE}/cycle), skipping ${coin}")
 
     return {
         "coin": coin,
         "pump_score": pump_score,
         "sentiment": sentiment,
+        "sentiment_label": sentiment_label,
         "spike_detected": spike_detected,
         "alert_triggered": alert_triggered,
         "ai_insight": ai_insight,
+        "confidence": confidence,
+        "signal_type": signal_type,
+        "trigger_reasons": trigger_reasons,
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
     }
+

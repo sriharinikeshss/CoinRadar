@@ -23,8 +23,12 @@ export default function TopBar({ searchQuery, onSearchChange, onAddCoin }) {
         >
           Add Coin
         </button>
-        <button className="text-primary border border-primary/20 px-4 py-2 rounded-xl font-headline font-bold text-[10px] tracking-widest uppercase hover:bg-primary/10 transition-all cursor-pointer">
-          Connect Wallet
+        <button 
+          className="flex items-center gap-2 bg-[#5865F2]/20 text-[#c1c6fb] border border-[#5865F2]/50 px-4 py-2 rounded-xl font-headline font-bold text-[10px] tracking-widest uppercase hover:bg-[#5865F2]/40 transition-all cursor-pointer shadow-[0_0_15px_rgba(88,101,242,0.15)] hover:shadow-[0_0_20px_rgba(88,101,242,0.3)]"
+          onClick={() => alert("Simulating redirect to CoinRadar Discord Alerts Webhook Server...")}
+        >
+          <span className="material-symbols-outlined text-[14px]">webhook</span>
+          Live Discord Alerts
         </button>
         <div className="flex items-center gap-3 ml-4 border-l border-white/10 pl-6">
           <span className="material-symbols-outlined text-outline hover:text-primary cursor-pointer transition-colors">tune</span>

@@ -227,6 +227,12 @@ export default function RadarCore({ coins, selectedCoinId, onBubbleClick }) {
         <div className="concentric-circle-2" />
         
         <div className="radar-sweep" />
+        <div className="radar-ripple" />
+        <div className="radar-ripple" />
+        <div className="radar-ripple" />
+        <div className="radar-ripple" />
+        <div className="radar-ripple" />
+        <div className="radar-ripple" />
         <div className="radar-center-dot" />
 
         {coinPositions.map((coin) => (

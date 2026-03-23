@@ -5,6 +5,7 @@ Serves live meme-coin radar data to the React frontend.
 
 import time
 import os
+import asyncio
 from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,21 +33,25 @@ app.add_middleware(
 
 # ──────────────── Cache ────────────────
 
+import threading
+
 _cache: dict[str, Any] = {"data": None, "timestamp": 0.0}
 CACHE_TTL = 60  # seconds
+_cache_lock = threading.Lock()
 
 def _get_cached_tokens():
     """Return cached tokens if fresh, otherwise rebuild and cache."""
-    now = time.time()
-    if _cache["data"] is not None and (now - _cache["timestamp"]) < CACHE_TTL:
-        print(f"[api] ✓ Serving cached data ({int(now - _cache['timestamp'])}s old)")
-        return _cache["data"]
+    with _cache_lock:
+        now = time.time()
+        if _cache["data"] is not None and (now - _cache["timestamp"]) < CACHE_TTL:
+            print(f"[api] ✓ Serving cached data ({int(now - _cache['timestamp'])}s old)")
+            return _cache["data"]
 
-    print("[api] ↻ Cache miss — rebuilding token list...")
-    tokens = build_token_list()
-    _cache["data"] = tokens
-    _cache["timestamp"] = now
-    return tokens
+        print("[api] ↻ Cache miss — rebuilding token list...")
+        tokens = build_token_list()
+        _cache["data"] = tokens
+        _cache["timestamp"] = time.time()
+        return tokens
 
 
 # ──────────────── Endpoints ────────────────
@@ -61,25 +66,53 @@ async def health():
 async def get_tokens():
     """
     Return the aggregated token list (cached for 60s).
+    Runs in a thread pool to avoid blocking the async event loop.
     """
-    tokens = _get_cached_tokens()
+    tokens = await asyncio.to_thread(_get_cached_tokens)
     return tokens
+
+
+@app.get("/api/stats")
+async def get_stats():
+    """Global market pulse — overview stats for the dashboard header."""
+    tokens = await asyncio.to_thread(_get_cached_tokens)
+    if not tokens:
+        return {"total_coins": 0, "avg_score": 0, "alerts_active": 0, "hottest": "N/A", "market_mood": "NEUTRAL"}
+    scores = [t["pump_score"] for t in tokens]
+    avg = round(sum(scores) / len(scores), 1)
+    return {
+        "total_coins": len(tokens),
+        "avg_score": avg,
+        "alerts_active": sum(1 for t in tokens if t.get("alert_triggered")),
+        "hottest": tokens[0]["symbol"] if tokens else "N/A",
+        "market_mood": "BULLISH" if avg > 55 else "BEARISH" if avg < 40 else "NEUTRAL",
+    }
 
 # ──────────────── AI Chat Integration ────────────────
 
 class ChatRequest(BaseModel):
     message: str
 
+# ──────────────── Chat Rate Limiting ────────────────
+_last_chat_time: float = 0.0
+CHAT_COOLDOWN: float = 2.0  # seconds between requests
+
 @app.post("/api/chat")
 async def chat_with_ai(req: ChatRequest):
     """
     Feeds real-time coin stats to the LLM as system context.
+    Rate-limited to prevent Groq credit burn.
     """
+    global _last_chat_time
+    now = time.time()
+    if now - _last_chat_time < CHAT_COOLDOWN:
+        return {"response": "[Rate Limited] Please wait a moment before asking again."}
+    _last_chat_time = now
     groq_api_key = os.getenv("GROQ_API_KEY")
     if not groq_api_key:
         return {"response": "[CoinRadar Terminal Error]: GROQ_API_KEY missing from backend environment variables. Please set it in backend/.env to enable the AI Analyst."}
     
-    tokens = _get_cached_tokens()
+    tokens = await asyncio.to_thread(_get_cached_tokens)
     
     # Format top 10 coins
     context_lines = []

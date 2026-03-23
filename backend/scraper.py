@@ -249,20 +249,6 @@ def get_reddit_data(limit: int = 50) -> dict:
     return results
 
 
-def _simple_sentiment(titles: list[str]) -> str:
-    """Dirt-simple keyword sentiment. Good enough for a hackathon."""
-    text = " ".join(titles).lower()
-    bull_words = ["moon", "pump", "buy", "gem", "100x", "rocket",
-                  "accumulate", "bullish", "send it", "ape"]
-    bear_words = ["dump", "rug", "scam", "sell", "dead", "bearish", "avoid"]
-    bull = sum(1 for w in bull_words if w in text)
-    bear = sum(1 for w in bear_words if w in text)
-    if bull > bear:
-        return "Bullish"
-    if bear > bull:
-        return "Bearish"
-    return "Neutral"
-
 
 # ───────────────────────── DexScreener ─────────────────────────
 
@@ -320,6 +306,11 @@ STICKY_COINS = {"PEPE", "DOGE", "SHIB", "WIF", "BONK", "FLOKI"}
 
 MAX_DISPLAY_COINS = 10  # Limit for clean radar display
 
+# Persist mention history & previous scores across API calls
+# so spike detection and momentum work on live data.
+_mention_history: dict[str, list[int]] = {}
+_prev_scores: dict[str, float] = {}
+
 
 def build_token_list() -> list[dict]:
     """
@@ -332,6 +323,10 @@ def build_token_list() -> list[dict]:
     Sticky coins (PEPE, DOGE, etc.) are always included even if
     Reddit didn't mention them in this scrape cycle.
     """
+    # Reset per-cycle alert cap
+    import intelligence
+    intelligence._alerts_this_cycle = 0
+
     reddit_data = get_reddit_data()
 
     if not reddit_data:
@@ -357,26 +352,62 @@ def build_token_list() -> list[dict]:
         if dex is None:
             continue
 
-        # Use our ML & Intelligence module instead of simple heuristics
+        # Build persistent history for spike detection
+        _mention_history.setdefault(symbol, []).append(mentions)
+        
+        # Persistent history (excluding current mention). Limited to last 5.
+        history = _mention_history[symbol][:-1][-5:]
+        # Fallback to mock data history ONLY if persistent history is empty and mock exists
+        if not history and "history" in info:
+            history = info["history"]
+
+        # Use history average as "previous" instead of self-referencing
+        mention_count_prev = int(sum(history) / max(1, len(history))) if history else mentions
+
+        # Momentum: compare to previous poll's score (use last known score)
+        prev_score = _prev_scores.get(symbol, 50.0)  # default 50 for first run
+
+        # Use our ML & Intelligence module (now with momentum)
+        # We approximate momentum from previous score delta
+        if prev_score > 0:
+            momentum = "rising" if mentions > mention_count_prev * 1.2 else "falling" if mentions < mention_count_prev * 0.8 else "stable"
+        else:
+            momentum = "stable"
+
         payload = {
             "coin": dex["symbol"],
             "tweets": info.get("titles", []),
             "mention_count_now": mentions,
-            "mention_count_prev": info.get("mentions_prev", mentions),
-            "history": info.get("history", [mentions]*5)
+            "mention_count_prev": mention_count_prev,
+            "history": history,
+            "momentum": momentum,
         }
         
         intelligence_result = analyze_coin(payload)
+        pump_score = intelligence_result["pump_score"]
+
+        # Update momentum tracking with actual computed score
+        if pump_score > prev_score + 2:
+            momentum = "rising"
+        elif pump_score < prev_score - 2:
+            momentum = "falling"
+        else:
+            momentum = "stable"
+        _prev_scores[symbol] = pump_score
 
         tokens.append({
             "symbol": f"${dex['symbol']}",
-            "pump_score": intelligence_result["pump_score"],
+            "pump_score": pump_score,
             "ai_insight": intelligence_result["ai_insight"],
             "live_price_usd": dex["price_usd"],
             "mentions_1h": mentions,
-            "sentiment_label": "Bullish" if intelligence_result["sentiment"] > 0 else "Bearish" if intelligence_result["sentiment"] < 0 else "Neutral",
+            "sentiment_label": intelligence_result.get("sentiment_label", "Neutral"),
             "spike_detected": intelligence_result["spike_detected"],
             "alert_triggered": intelligence_result["alert_triggered"],
+            "momentum": momentum,
+            "confidence": intelligence_result.get("confidence", "LOW"),
+            "signal_type": intelligence_result.get("signal_type", "Monitoring"),
+            "trigger_reasons": intelligence_result.get("trigger_reasons", []),
         })
 
         # Be polite to free APIs
@@ -392,38 +423,3 @@ def build_token_list() -> list[dict]:
     return tokens
 
 
-def _compute_pump_score(mentions: int, dex: dict) -> int:
-    """
-    Heuristic 0-100 pump score.
-    Factors: social mentions, 24h volume, liquidity.
-    """
-    mention_score = min(mentions / 50, 1.0) * 40          # max 40 pts
-    volume_score = min(dex["volume_24h"] / 500_000, 1.0) * 30  # max 30 pts
-    liq_score = min(dex["liquidity_usd"] / 200_000, 1.0) * 30  # max 30 pts
-    return min(int(mention_score + volume_score + liq_score), 100)
-
-
-def _generate_insight(
-    symbol: str,
-    mentions: int,
-    sentiment: str,
-    dex: dict,
-) -> str:
-    """Return a short, human-readable insight string."""
-    vol = dex["volume_24h"]
-    liq = dex["liquidity_usd"]
-
-    if sentiment == "Bullish" and mentions > 10:
-        return (
-            f"Driven by aggressive Reddit accumulation with "
-            f"{mentions} mentions and ${vol:,.0f} 24h volume."
-        )
-    if sentiment == "Bearish":
-        return (
-            f"Caution: bearish sentiment detected across "
-            f"{mentions} mentions despite ${liq:,.0f} liquidity."
-        )
-    return (
-        f"Moderate buzz with {mentions} mentions, "
-        f"${vol:,.0f} volume and ${liq:,.0f} liquidity."
-    )
