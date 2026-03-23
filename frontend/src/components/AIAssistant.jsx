@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Sparkles } from 'lucide-react';
 
 const aiResponses = [
   "Based on current social signals, DOGE and PEPE are showing the strongest momentum. PEPE's hype score of 91 puts it in extreme territory — historically, corrections follow within 24-48 hours.",
@@ -11,7 +12,7 @@ const aiResponses = [
 export default function AIAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', text: '👋 Hi! I\'m your AI Hype Analyst. Ask me about any coin trend, sentiment analysis, or market signals.' }
+    { role: 'assistant', text: 'Hi! I\'m your AI Hype Analyst. Ask me about any coin trend, sentiment analysis, or market signals.' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
@@ -28,7 +29,6 @@ export default function AIAssistant() {
     setMessages(prev => [...prev, userMsg]);
     setInputValue('');
 
-    // Simulate AI response
     setTimeout(() => {
       const response = aiResponses[responseIndex.current % aiResponses.length];
       responseIndex.current++;
@@ -45,12 +45,12 @@ export default function AIAssistant() {
       {isOpen && (
         <div className="ai-assistant-panel">
           <div className="ai-panel-header">
-            <span className="ai-panel-title">🧠 AI ANALYST</span>
-            <button className="ai-panel-close" onClick={() => setIsOpen(false)}>✕</button>
+            <span className="ai-panel-title">AI ANALYST</span>
+            <button className="ai-panel-close" onClick={() => setIsOpen(false)}>×</button>
           </div>
           <div className="ai-panel-messages">
             {messages.map((msg, i) => (
-              <div key={i} className={`ai-message ${msg.role}`}>
+              <div key={i} className={`ai-message ${msg.role === 'assistant' ? 'bot' : 'user'}`}>
                 {msg.text}
               </div>
             ))}
@@ -66,7 +66,7 @@ export default function AIAssistant() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
             />
-            <button className="ai-panel-send" onClick={handleSend}>➤</button>
+            <button className="ai-panel-send" onClick={handleSend}>→</button>
           </div>
         </div>
       )}
@@ -76,7 +76,7 @@ export default function AIAssistant() {
         onClick={() => setIsOpen(!isOpen)}
         title="AI Assistant"
       >
-        🧠
+        <Sparkles size={20} />
       </button>
     </>
   );

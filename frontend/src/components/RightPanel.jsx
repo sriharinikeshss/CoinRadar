@@ -41,7 +41,7 @@ export default function RightPanel({ coin, insight, alerts }) {
   }, [alerts]);
 
   return (
-    <aside className="right-panel">
+    <aside className="right-column">
       {/* AI Insights */}
       <div className="panel-section" style={{ animationDelay: '0.1s' }}>
         <div className="panel-section-title">AI Insight</div>
@@ -56,7 +56,7 @@ export default function RightPanel({ coin, insight, alerts }) {
         <div className="alerts-list">
           {visibleAlerts.map((alert, i) => (
             <div
-              key={alert.id}
+              key={`${alert.id}-${i}`}
               className={`alert-item severity-${alert.severity}`}
               style={{ animationDelay: `${i * 0.1}s` }}
             >
@@ -75,7 +75,7 @@ export default function RightPanel({ coin, insight, alerts }) {
             <CircularProgress
               key={`sent-${coin.id}`}
               value={coin.sentimentPercent}
-              color={coin.sentiment === 'positive' ? '#00ff88' : coin.sentiment === 'negative' ? '#ff3366' : '#ffcc00'}
+              color={coin.sentiment === 'positive' ? '#00FF88' : coin.sentiment === 'negative' ? '#FF4D4D' : '#FFCC00'}
             />
             <span className="metric-label">Sentiment</span>
           </div>
@@ -83,7 +83,7 @@ export default function RightPanel({ coin, insight, alerts }) {
             <CircularProgress
               key={`fomo-${coin.id}`}
               value={coin.fomo}
-              color={coin.fomo > 70 ? '#ff3366' : '#ffcc00'}
+              color={coin.fomo > 70 ? '#FF4D4D' : '#FFCC00'}
             />
             <span className="metric-label">FOMO</span>
           </div>
@@ -91,7 +91,7 @@ export default function RightPanel({ coin, insight, alerts }) {
             <CircularProgress
               key={`eng-${coin.id}`}
               value={coin.engagement}
-              color="#00aaff"
+              color="#00AAFF"
             />
             <span className="metric-label">Engage</span>
           </div>
