@@ -45,18 +45,117 @@ DEXSCREENER_SEARCH = "https://api.dexscreener.com/latest/dex/search"
 
 # ─────────────────────── Mock / Fallback Data ───────────────────────
 
-MOCK_REDDIT_DATA: dict = {
-    "PEPE":  {"mentions": 340, "sentiment_hint": "Bullish"},
-    "WIF":   {"mentions": 210, "sentiment_hint": "Bullish"},
-    "BONK":  {"mentions": 185, "sentiment_hint": "Neutral"},
-    "FLOKI": {"mentions": 150, "sentiment_hint": "Bullish"},
-    "DOGE":  {"mentions": 130, "sentiment_hint": "Neutral"},
-    "SHIB":  {"mentions": 95,  "sentiment_hint": "Bearish"},
-    "TURBO": {"mentions": 78,  "sentiment_hint": "Bullish"},
-    "BRETT": {"mentions": 65,  "sentiment_hint": "Neutral"},
-    "MOG":   {"mentions": 52,  "sentiment_hint": "Bullish"},
-    "POPCAT":{"mentions": 45,  "sentiment_hint": "Neutral"},
+# 54 realistic social-media-style posts across 6 coins with mixed sentiment.
+# Each post is {coin, text}. These are aggregated at runtime into the same
+# dict structure that the live Reddit path produces, so intelligence.py
+# receives identical input regardless of data source.
+
+MOCK_POSTS: list[dict] = [
+    # ── PEPE (heavily bullish) ──
+    {"coin": "PEPE", "text": "$PEPE going to the moon 🚀🚀 this is just the beginning"},
+    {"coin": "PEPE", "text": "Huge whale just bought 500B $PEPE, bullish af"},
+    {"coin": "PEPE", "text": "$PEPE breaking out right now, don't miss this gem 💎"},
+    {"coin": "PEPE", "text": "PEPE is the next 100x, ape in before it's too late"},
+    {"coin": "PEPE", "text": "Just loaded up on more $PEPE, wagmi fam 🐸"},
+    {"coin": "PEPE", "text": "PEPE chart looking insanely bullish, mooning soon"},
+    {"coin": "PEPE", "text": "$PEPE volume is exploding, lambo incoming"},
+    {"coin": "PEPE", "text": "Diamond hands on PEPE, this is a banger 💎🙌"},
+    {"coin": "PEPE", "text": "Massive accumulation on $PEPE, smart money is buying"},
+    # ── WIF (bullish with some caution) ──
+    {"coin": "WIF", "text": "$WIF breaking resistance, bullish breakout confirmed 📈"},
+    {"coin": "WIF", "text": "dogwifhat is the best meme coin right now, flying 🚀"},
+    {"coin": "WIF", "text": "WIF holders are not selling, diamond hands community 💎"},
+    {"coin": "WIF", "text": "$WIF pump is real, volume surging like crazy"},
+    {"coin": "WIF", "text": "Be careful with $WIF, might see a small pullback first"},
+    {"coin": "WIF", "text": "WIF is mooning, best performer this week wagmi"},
+    {"coin": "WIF", "text": "$WIF looking based, accumulating more before the next leg up"},
+    {"coin": "WIF", "text": "Just aped into $WIF, this gem is going to fly"},
+    # ── BONK (mixed / neutral) ──
+    {"coin": "BONK", "text": "$BONK moving sideways, waiting for a breakout signal"},
+    {"coin": "BONK", "text": "BONK volume is decent but nothing special today"},
+    {"coin": "BONK", "text": "$BONK might pump or dump, hard to tell right now"},
+    {"coin": "BONK", "text": "Holding my BONK bag, not selling but not buying more"},
+    {"coin": "BONK", "text": "BONK community is still active, could see some action soon"},
+    {"coin": "BONK", "text": "$BONK consolidating, could go either way from here"},
+    {"coin": "BONK", "text": "Small pump on BONK charts, let's see if it holds"},
+    {"coin": "BONK", "text": "BONK is a solid meme coin but needs more volume to moon"},
+    {"coin": "BONK", "text": "$BONK looking bullish on the 4h chart, could be a gem"},
+    # ── FLOKI (bullish) ──
+    {"coin": "FLOKI", "text": "$FLOKI is pumping hard, don't sleep on this one 🚀"},
+    {"coin": "FLOKI", "text": "FLOKI ecosystem is growing fast, bullish long term"},
+    {"coin": "FLOKI", "text": "Just bought more $FLOKI, this is going to be huge"},
+    {"coin": "FLOKI", "text": "FLOKI marketing campaign is insane, mooning incoming"},
+    {"coin": "FLOKI", "text": "$FLOKI whale activity detected, big pump coming"},
+    {"coin": "FLOKI", "text": "FLOKI breaking ATH soon, hodl and enjoy the ride 💎"},
+    {"coin": "FLOKI", "text": "Be cautious with FLOKI, some sell pressure at resistance"},
+    {"coin": "FLOKI", "text": "$FLOKI flying past all expectations, wagmi"},
+    # ── DOGE (neutral / mixed) ──
+    {"coin": "DOGE", "text": "$DOGE just chilling, Elon hasn't tweeted in a while"},
+    {"coin": "DOGE", "text": "DOGE is stable but boring, need a catalyst to pump"},
+    {"coin": "DOGE", "text": "Still holding my $DOGE, it's the OG meme coin"},
+    {"coin": "DOGE", "text": "DOGE community is huge but price action is flat"},
+    {"coin": "DOGE", "text": "$DOGE might see a small pump if BTC moves up"},
+    {"coin": "DOGE", "text": "DOGE is undervalued at this price, bullish medium term"},
+    {"coin": "DOGE", "text": "Sold half my $DOGE bag, taking some profits"},
+    {"coin": "DOGE", "text": "$DOGE volume declining, not looking great short term"},
+    {"coin": "DOGE", "text": "DOGE needs Elon to tweet again for a moon mission 🐕"},
+    # ── SHIB (bearish / dump) ──
+    {"coin": "SHIB", "text": "$SHIB looking like a rug pull, be careful everyone"},
+    {"coin": "SHIB", "text": "SHIB dumping hard, whales are exiting their positions"},
+    {"coin": "SHIB", "text": "Sold all my $SHIB, this is going to crash more"},
+    {"coin": "SHIB", "text": "SHIB community is in panic mode, massive sell-off"},
+    {"coin": "SHIB", "text": "$SHIB dead coin walking, avoid at all costs"},
+    {"coin": "SHIB", "text": "SHIB scam alert — devs are dumping on holders"},
+    {"coin": "SHIB", "text": "Got rekt on $SHIB, should have sold earlier"},
+    {"coin": "SHIB", "text": "$SHIB fud is everywhere, bearish sentiment across the board"},
+    {"coin": "SHIB", "text": "Maybe SHIB will recover but I'm not holding my breath"},
+    {"coin": "SHIB", "text": "$SHIB is a honeypot, exit while you still can"},
+]
+
+# Simulated previous-hour mention counts (for spike detection)
+_MOCK_MENTION_HISTORY = {
+    "PEPE":  [120, 150, 180, 200, 250],   # rising → current will spike
+    "WIF":   [80, 90, 100, 110, 120],      # steady rise
+    "BONK":  [100, 95, 105, 100, 98],      # flat
+    "FLOKI": [60, 70, 80, 90, 95],         # gradual rise
+    "DOGE":  [130, 125, 130, 128, 130],    # flat / stable
+    "SHIB":  [150, 140, 120, 100, 80],     # declining
 }
+
+
+def _build_mock_reddit_result() -> dict:
+    """
+    Aggregate MOCK_POSTS into the same dict structure the live path produces.
+
+    Returns { "PEPE": {"mentions": N, "titles": [...], "history": [...]}, ... }
+
+    Each call shuffles and randomly samples 70-100% of posts so the output
+    feels different every time (simulates a live social stream).
+    """
+    shuffled = MOCK_POSTS.copy()
+    random.shuffle(shuffled)
+
+    # Sample 70-100% of posts to add variability
+    sample_size = random.randint(int(len(shuffled) * 0.7), len(shuffled))
+    sampled = shuffled[:sample_size]
+
+    # Group by coin
+    grouped: dict[str, list[str]] = {}
+    for post in sampled:
+        coin = post["coin"]
+        grouped.setdefault(coin, []).append(post["text"])
+
+    # Build result dict matching live structure
+    result: dict = {}
+    for coin, titles in grouped.items():
+        result[coin] = {
+            "mentions": len(titles) * random.randint(30, 50),  # scale up to realistic counts
+            "titles": titles,
+            "history": _MOCK_MENTION_HISTORY.get(coin, [50] * 5),
+        }
+
+    return result
+
 
 MOCK_DEX_DATA: dict = {
     "PEPE":  {"price_usd": "0.0000012",  "symbol": "PEPE",  "name": "Pepe",         "volume_24h": 890000,  "liquidity_usd": 420000},
@@ -99,15 +198,15 @@ def _fetch_reddit_json(subreddit: str, limit: int = 50) -> list[dict]:
 def get_reddit_data(limit: int = 50) -> dict:
     """
     Try the live Reddit JSON endpoint.
-    On ANY failure, fall back to MOCK_REDDIT_DATA seamlessly.
+    On ANY failure, fall back to mock data seamlessly.
 
     Returns
     -------
-    dict  –  { "PEPE": {"mentions": 42, "sentiment_hint": "Bullish"}, … }
+    dict  –  { "PEPE": {"mentions": 340, "titles": [...], "history": [...]}, … }
     """
     if not USE_REAL_DATA:
         print("[scraper] ℹ USE_REAL_DATA=false → serving mock Reddit data")
-        return MOCK_REDDIT_DATA
+        return _build_mock_reddit_result()
 
     # ── Attempt live fetch ──
     mention_counter = collections.Counter()
@@ -137,14 +236,14 @@ def get_reddit_data(limit: int = 50) -> dict:
     # If we got nothing useful from live data, fall back
     if not live_succeeded or not mention_counter:
         print("[scraper] ⚠ Reddit live data empty/failed → falling back to mock data")
-        return MOCK_REDDIT_DATA
+        return _build_mock_reddit_result()
 
     # Build result dict (top-20 by mentions)
     results: dict = {}
     for symbol, count in mention_counter.most_common(20):
         titles = sentiment_texts.get(symbol, [])
-        hint = _simple_sentiment(titles)
-        results[symbol] = {"mentions": count, "sentiment_hint": hint}
+        # Include titles natively for the intelligence module to do its own analysis later
+        results[symbol] = {"mentions": count, "titles": titles}
 
     print(f"[scraper] ✓ Reddit live data: found {len(results)} symbols")
     return results
@@ -232,24 +331,34 @@ def build_token_list() -> list[dict]:
 
     tokens: list[dict] = []
 
+    from intelligence import analyze_coin
     for symbol, info in reddit_data.items():
         mentions = info["mentions"]
-        sentiment = info["sentiment_hint"]
-
+        
         dex = get_dexscreener_data(symbol)
         if dex is None:
             continue
 
-        pump_score = _compute_pump_score(mentions, dex)
-        ai_insight = _generate_insight(symbol, mentions, sentiment, dex)
+        # Use our ML & Intelligence module instead of simple heuristics
+        payload = {
+            "coin": dex["symbol"],
+            "tweets": info.get("titles", []), # Need to pass real tweets down here
+            "mention_count_now": mentions,
+            "mention_count_prev": info.get("mentions_prev", mentions), # Mock previous data for now
+            "history": info.get("history", [mentions]*5)
+        }
+        
+        intelligence_result = analyze_coin(payload)
 
         tokens.append({
             "symbol": f"${dex['symbol']}",
-            "pump_score": pump_score,
-            "ai_insight": ai_insight,
+            "pump_score": intelligence_result["pump_score"],
+            "ai_insight": intelligence_result["ai_insight"],
             "live_price_usd": dex["price_usd"],
             "mentions_1h": mentions,
-            "sentiment_label": sentiment,
+            "sentiment_label": "Bullish" if intelligence_result["sentiment"] > 0 else "Bearish" if intelligence_result["sentiment"] < 0 else "Neutral",
+            "spike_detected": intelligence_result["spike_detected"],
+            "alert_triggered": intelligence_result["alert_triggered"],
         })
 
         # Be polite to free APIs
