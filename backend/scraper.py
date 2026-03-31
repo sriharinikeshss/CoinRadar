@@ -213,33 +213,21 @@ def _fetch_reddit_json(subreddit: str, limit: int = 25) -> list[dict]:
             resp.raise_for_status()
             children = resp.json().get("data", {}).get("children", [])
             if children:
-                print(f"[scraper] ✓ Fetched {len(children)} posts from {domain}/r/{subreddit}")
+                print(f"[scraper] Fetched {len(children)} posts from {domain}/r/{subreddit}")
                 return [child["data"] for child in children]
         except Exception as exc:
             print(f"[scraper] {domain} failed for r/{subreddit}: {exc}")
             time.sleep(1)
-    
     raise RuntimeError(f"All Reddit endpoints blocked for r/{subreddit}")
 
 
 def get_reddit_data(limit: int = 50) -> dict:
-    """
-    Try the live Reddit JSON endpoint.
-    On ANY failure, fall back to mock data seamlessly.
-
-    Returns
-    -------
-    dict  –  { "PEPE": {"mentions": 340, "titles": [...], "history": [...]}, … }
-    """
     if not USE_REAL_DATA:
-        print("[scraper] ℹ USE_REAL_DATA=false → serving mock Reddit data")
+        print("[scraper] USE_REAL_DATA=false serving mock Reddit data")
         return _build_mock_reddit_result()
-
-    # ── Attempt live fetch ──
     mention_counter = collections.Counter()
     sentiment_texts: dict[str, list[str]] = {}
     live_succeeded = False
-
     for sub_name in SUBREDDITS:
         try:
             posts = _fetch_reddit_json(sub_name, limit)
@@ -247,57 +235,37 @@ def get_reddit_data(limit: int = 50) -> dict:
             for post in posts:
                 blob = f"{post.get('title', '')} {post.get('selftext', '')}"
                 tickers = CASHTAG_RE.findall(blob)
-                # Deduplicate: only count each ticker once per post
                 seen_in_post: set[str] = set()
                 for t in tickers:
                     t_upper = t.upper()
                     if t_upper in TICKER_BLACKLIST or len(t_upper) < 2:
                         continue
                     if t_upper in seen_in_post:
-                        continue  # Skip duplicate mentions within the same post
+                        continue
                     seen_in_post.add(t_upper)
                     mention_counter[t_upper] += 1
                     sentiment_texts.setdefault(t_upper, []).append(
                         post.get("title", "")
                     )
-            # Longer delay between sub requests to avoid rate limits
             time.sleep(3.0)
         except Exception as exc:
-            print(f"[scraper] ⚠ Reddit fetch failed for r/{sub_name}: {exc}")
-
-    # If we got nothing useful from live data, fall back
+            print(f"[scraper] Reddit fetch failed for r/{sub_name}: {exc}")
     if not live_succeeded or not mention_counter:
-        print("[scraper] ⚠ Reddit live data empty/failed → falling back to mock data")
+        print("[scraper] Reddit live data empty/failed falling back to mock data")
         return _build_mock_reddit_result()
-
-    # Build result dict (top-20 by mentions)
     results: dict = {}
     for symbol, count in mention_counter.most_common(20):
         titles = sentiment_texts.get(symbol, [])
-        # Include titles natively for the intelligence module to do its own analysis later
         results[symbol] = {"mentions": count, "titles": titles}
-
-    print(f"[scraper] ✓ Reddit live data: found {len(results)} symbols")
+    print(f"[scraper] Reddit live data: found {len(results)} symbols")
     return results
-
 
 
 # ───────────────────────── DexScreener ─────────────────────────
 
 def get_dexscreener_data(symbol: str) -> Optional[dict]:
-    """
-    Try live DexScreener search.  On failure, return mock data for
-    known symbols or None for unknown ones.
-
-    Returns
-    -------
-    dict | None  –  { "price_usd": str, "symbol": str, "name": str,
-                       "volume_24h": float, "liquidity_usd": float }
-    """
     if not USE_REAL_DATA:
         return MOCK_DEX_DATA.get(symbol)
-
-    # ── Attempt live fetch ──
     try:
         resp = requests.get(
             DEXSCREENER_SEARCH,
@@ -308,10 +276,7 @@ def get_dexscreener_data(symbol: str) -> Optional[dict]:
         data = resp.json()
         pairs = data.get("pairs") or []
         if not pairs:
-            # No live result → try mock fallback for known symbols
             return MOCK_DEX_DATA.get(symbol)
-
-        # Pick the pair with the highest USD liquidity
         best = max(
             pairs,
             key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0),
@@ -326,48 +291,38 @@ def get_dexscreener_data(symbol: str) -> Optional[dict]:
             ),
         }
     except Exception as exc:
-        print(f"[scraper] ⚠ DexScreener lookup failed for {symbol}: {exc}")
-        # Graceful fallback
+        print(f"[scraper] DexScreener lookup failed for {symbol}: {exc}")
         return MOCK_DEX_DATA.get(symbol)
 
 
 # ───────────────────────── Aggregation pipeline ─────────────────────────
 
-# These coins ALWAYS appear in the output, even if Reddit doesn't mention them.
 STICKY_COINS = {"PEPE", "DOGE", "SHIB", "WIF", "BONK", "FLOKI"}
-
-MAX_DISPLAY_COINS = 10  # Limit for clean radar display
-
-# Persist mention history & previous scores across API calls
-# so spike detection and momentum work on live data.
+MAX_DISPLAY_COINS = 10
 _mention_history: dict[str, list[int]] = {}
 _prev_scores: dict[str, float] = {}
-
 
 def build_token_list() -> list[dict]:
     """
     End-to-end pipeline:
-      Reddit mentions  ➜  DexScreener enrichment  ➜  final token list.
-
-    Always returns a well-formed list, even under total API failure
-    (falls back to mock data).  The frontend always gets stable output.
-
-    Sticky coins (PEPE, DOGE, etc.) are always included even if
-    Reddit didn't mention them in this scrape cycle.
+      Reddit mentions -> DexScreener enrichment -> final token list.
+    
+    Parallelizes enrichment to ensure the dashboard loads in < 5 seconds
+    even with 10+ coins.
     """
+    from intelligence import analyze_coin
+    from concurrent.futures import ThreadPoolExecutor
+    
     # Reset per-cycle alert cap
     import intelligence
     intelligence._alerts_this_cycle = 0
-
+    
     reddit_data = get_reddit_data()
-
     if not reddit_data:
-        print("[scraper] ⚠ No data at all — returning empty list")
         return []
 
-    # Ensure sticky and user-added coins are in the data (with baseline values if missing)
+    # Ensure sticky and user-added coins are in the data
     targets = set(STICKY_COINS) | USER_ADDED_COINS
-
     for target in targets:
         if target not in reddit_data:
             reddit_data[target] = {
@@ -376,60 +331,54 @@ def build_token_list() -> list[dict]:
                 "history": [0] * 5,
             }
 
-    tokens: list[dict] = []
-
-    from intelligence import analyze_coin
-    for symbol, info in reddit_data.items():
+    def enrich_token(symbol_data):
+        symbol, info = symbol_data
         mentions = info["mentions"]
         
+        # DexScreener lookups are the slowest part (network-bound)
         dex = get_dexscreener_data(symbol)
         if dex is None:
-            continue
+            return None
 
-        # Build persistent history for spike detection
         _mention_history.setdefault(symbol, []).append(mentions)
         
-        # Persistent history (excluding current mention). Limited to last 5.
-        history = _mention_history[symbol][:-1][-5:]
-        # Fallback to mock data history ONLY if persistent history is empty and mock exists
+        # History slicing: get up to 5 previous entries
+        all_hist = _mention_history[symbol]
+        history = all_hist[:-1][-5:] if len(all_hist) > 1 else []
+        
         if not history and "history" in info:
             history = info["history"]
 
-        # Use history average as "previous" instead of self-referencing
-        mention_count_prev = int(sum(history) / max(1, len(history))) if history else mentions
+        # Stats for AI engine
+        avg_mentions = int(sum(history) / max(1, len(history))) if history else mentions
+        prev_score = _prev_scores.get(symbol, 50.0)
 
-        # Momentum: compare to previous poll's score (use last known score)
-        prev_score = _prev_scores.get(symbol, 50.0)  # default 50 for first run
-
-        # Use our ML & Intelligence module (now with momentum)
-        # We approximate momentum from previous score delta
+        # Baseline momentum
+        momentum = "stable"
         if prev_score > 0:
-            momentum = "rising" if mentions > mention_count_prev * 1.2 else "falling" if mentions < mention_count_prev * 0.8 else "stable"
-        else:
-            momentum = "stable"
+            if mentions > avg_mentions * 1.2: momentum = "rising"
+            elif mentions < avg_mentions * 0.8: momentum = "falling"
 
         payload = {
             "coin": dex["symbol"],
             "tweets": info.get("titles", []),
             "mention_count_now": mentions,
-            "mention_count_prev": mention_count_prev,
+            "mention_count_prev": avg_mentions,
             "history": history,
             "momentum": momentum,
         }
         
+        # Groq AI analysis (network-bound)
         intelligence_result = analyze_coin(payload)
         pump_score = intelligence_result["pump_score"]
 
-        # Update momentum tracking with actual computed score
-        if pump_score > prev_score + 2:
-            momentum = "rising"
-        elif pump_score < prev_score - 2:
-            momentum = "falling"
-        else:
-            momentum = "stable"
+        # Refine momentum
+        if pump_score > prev_score + 2: momentum = "rising"
+        elif pump_score < prev_score - 2: momentum = "falling"
+        
         _prev_scores[symbol] = pump_score
 
-        tokens.append({
+        return {
             "symbol": f"${dex['symbol']}",
             "pump_score": pump_score,
             "ai_insight": intelligence_result["ai_insight"],
@@ -442,18 +391,21 @@ def build_token_list() -> list[dict]:
             "confidence": intelligence_result.get("confidence", "LOW"),
             "signal_type": intelligence_result.get("signal_type", "Monitoring"),
             "trigger_reasons": intelligence_result.get("trigger_reasons", []),
-        })
+        }
 
-        # Be polite to free APIs
-        if USE_REAL_DATA:
-            time.sleep(0.3)
+    # Run up to 10 enrichments in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(enrich_token, reddit_data.items()))
+    
+    tokens = [r for r in results if r is not None]
 
-    # Sort by pump_score descending, limit to top N for clean display
+    # Sort and trim
     tokens.sort(key=lambda t: t["pump_score"], reverse=True)
     tokens = tokens[:MAX_DISPLAY_COINS]
 
     source = "LIVE" if USE_REAL_DATA else "MOCK"
-    print(f"[scraper] ✓ Pipeline complete ({source}): {len(tokens)} tokens")
+    print(f"[scraper] [OK] Pipeline complete ({source}): found {len(tokens)} symbols")
     return tokens
+
 
 

@@ -375,7 +375,7 @@ def send_discord_alert(
     # Per-coin cooldown check
     now = _time.time()
     if coin in _alert_cooldowns and (now - _alert_cooldowns[coin]) < ALERT_COOLDOWN:
-        print(f"[alert] ⏳ {coin} on cooldown, skipping Discord alert")
+        print(f"[alert] [WAIT] {coin} on cooldown, skipping Discord alert")
         return
     _alert_cooldowns[coin] = now
 
@@ -416,12 +416,12 @@ def send_discord_alert(
     try:
         resp = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=5)
         if resp.status_code == 204:
-            print(f"[alert] ✅ Discord alert sent for ${coin}: {signals_text}")
+            print(f"[alert] [OK] Discord alert sent for ${coin}: {signals_text}")
             _time.sleep(0.8)  # Respect Discord rate limits
         else:
-            print(f"[alert] ❌ Discord webhook failed HTTP {resp.status_code}: {resp.text[:200]}")
+            print(f"[alert] [FAIL] Discord webhook failed HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
-        print(f"[alert] ❌ Discord webhook exception: {e}")
+        print(f"[alert] [FAIL] Discord webhook exception: {e}")
 
 
 # ──────────────────────────────────────────────
