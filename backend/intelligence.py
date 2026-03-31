@@ -218,8 +218,71 @@ Focus on the why. Do not use hashtags or emojis. Start with the coin name."""
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[intelligence] Groq API Failed for {coin}: {e}")
+        print(f"[intelligence] Groq API failed for {coin}: {e}")
         return f"{coin} shows strong bullish sentiment across {mentions} mentions"
+
+
+def send_discord_dump_alert(
+    coin: str,
+    score: float,
+    sentiment: float,
+    tweets: list,
+    insight: str,
+    signals: list[str],
+):
+    """
+    Send a bearish dump-warning embed to Discord.
+    """
+    if not DISCORD_WEBHOOK_URL:
+        return
+
+    # Per-coin cooldown check (shares cooldown with pump alerts)
+    now = _time.time()
+    cooldown_key = f"{coin}_dump"
+    if cooldown_key in _alert_cooldowns and (now - _alert_cooldowns[cooldown_key]) < ALERT_COOLDOWN:
+        print(f"[alert] {coin} dump alert on cooldown, skipping")
+        return
+    _alert_cooldowns[cooldown_key] = now
+
+    unique_tweets = list(dict.fromkeys(tweets)) if tweets else []
+    top_tweets = unique_tweets[:3] if unique_tweets else ["No posts available"]
+    tweet_text = "\n".join(f"- {t[:100]}" for t in top_tweets)
+    signals_text = " + ".join(signals)
+
+    embed = {
+        "embeds": [
+            {
+                "title": f"DUMP WARNING: ${coin}",
+                "description": (
+                    f"**Pump Score:** {score:.1f}/100\n"
+                    f"**Confidence:** LOW\n"
+                    f"**Bearish Signals:** {signals_text}\n"
+                    f"**Insight:** {insight}"
+                ),
+                "color": 0xFF4444,
+                "fields": [
+                    {
+                        "name": "Recent Social Posts",
+                        "value": tweet_text,
+                        "inline": False,
+                    }
+                ],
+                "footer": {
+                    "text": f"CoinRadar | {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+                },
+            }
+        ]
+    }
+
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=5)
+        if resp.status_code == 204:
+            print(f"[alert] Discord DUMP alert sent for ${coin}: {signals_text}")
+            _time.sleep(0.8)
+        else:
+            print(f"[alert] Discord returned {resp.status_code} for ${coin}")
+    except Exception as exc:
+        print(f"[alert] Discord dump alert failed for ${coin}: {exc}")
 
 
 def _classify_signal(pump_score: float, spike_detected: bool) -> str:
@@ -262,7 +325,33 @@ def _check_composite_trigger(
         signals.append(f"Bullish Sentiment ({sentiment:.2f})")
 
     triggered = len(signals) >= 2
-    print(f"[alert] 🔍 Composite check: {len(signals)} signals active {signals} → {'TRIGGERED' if triggered else 'no trigger'}")
+    print(f"[alert] Composite check: {len(signals)} signals active {signals} -> {'TRIGGERED' if triggered else 'no trigger'}")
+    return triggered, signals
+
+
+def _check_bearish_trigger(
+    pump_score: float,
+    spike_detected: bool,
+    momentum: str,
+    sentiment: float = 0.0,
+) -> tuple[bool, list[str]]:
+    """
+    Bearish composite trigger.
+    Fires when ANY 2 of 4 bearish conditions are met simultaneously.
+    Returns (triggered, list_of_reasons).
+    """
+    signals: list[str] = []
+    if pump_score < 30:
+        signals.append(f"Low Score ({pump_score:.1f})")
+    if not spike_detected and pump_score < 50:
+        signals.append("No Hype Detected")
+    if momentum == "falling":
+        signals.append("Falling Momentum")
+    if sentiment < -0.15:
+        signals.append(f"Bearish Sentiment ({sentiment:.2f})")
+
+    triggered = len(signals) >= 2
+    print(f"[alert] Bearish check: {len(signals)} signals active {signals} -> {'TRIGGERED' if triggered else 'no trigger'}")
     return triggered, signals
 
 
@@ -290,7 +379,9 @@ def send_discord_alert(
         return
     _alert_cooldowns[coin] = now
 
-    top_tweets = tweets[:3] if tweets else ["No tweets available"]
+    # Deduplicate titles before display
+    unique_tweets = list(dict.fromkeys(tweets)) if tweets else []
+    top_tweets = unique_tweets[:3] if unique_tweets else ["No posts available"]
     tweet_text = "\n".join(f"• {t[:100]}" for t in top_tweets)
     signals_text = " + ".join(signals)
 
@@ -422,7 +513,20 @@ def analyze_coin(payload: dict) -> dict:
         )
         _alerts_this_cycle += 1
     elif alert_triggered:
-        print(f"[alert] 🛑 Alert cap reached ({MAX_ALERTS_PER_CYCLE}/cycle), skipping ${coin}")
+        print(f"[alert] Alert cap reached ({MAX_ALERTS_PER_CYCLE}/cycle), skipping ${coin}")
+
+    # 9. Bearish dump alert (separate from bullish alerts)
+    dump_triggered = False
+    dump_reasons: list[str] = []
+    if len(history) > 1:
+        dump_triggered, dump_reasons = _check_bearish_trigger(
+            pump_score, spike_detected, momentum, sentiment
+        )
+    if dump_triggered and _alerts_this_cycle < MAX_ALERTS_PER_CYCLE:
+        send_discord_dump_alert(
+            coin, pump_score, sentiment, tweets, ai_insight, dump_reasons
+        )
+        _alerts_this_cycle += 1
 
     return {
         "coin": coin,
@@ -431,10 +535,10 @@ def analyze_coin(payload: dict) -> dict:
         "sentiment_label": sentiment_label,
         "spike_detected": spike_detected,
         "alert_triggered": alert_triggered,
+        "dump_triggered": dump_triggered,
         "ai_insight": ai_insight,
         "confidence": confidence,
         "signal_type": signal_type,
-        "trigger_reasons": trigger_reasons,
+        "trigger_reasons": trigger_reasons + dump_reasons,
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
     }
-

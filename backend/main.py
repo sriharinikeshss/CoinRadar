@@ -36,7 +36,7 @@ app.add_middleware(
 import threading
 
 _cache: dict[str, Any] = {"data": None, "timestamp": 0.0}
-CACHE_TTL = 60  # seconds
+CACHE_TTL = 300  # 5 minutes — Reddit free API needs breathing room
 _cache_lock = threading.Lock()
 
 def _get_cached_tokens():
@@ -130,7 +130,7 @@ async def get_tokens():
 
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_reddit_data(limit: int = 25) -> dict:
     """Global market pulse — overview stats for the dashboard header."""
     tokens = await asyncio.to_thread(_get_cached_tokens)
     if not tokens:

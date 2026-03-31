@@ -31,9 +31,22 @@ USE_REAL_DATA: bool = os.getenv("USE_REAL_DATA", "true").lower() in ("true", "1"
 SUBREDDITS = ["CryptoMoonShots", "memecoins"]
 CASHTAG_RE = re.compile(r"\$([A-Za-z]{2,12})\b")
 
-REDDIT_JSON_HEADERS = {
-    "User-Agent": os.getenv("REDDIT_USER_AGENT", "CoinRadar/1.0 (by /u/coinradar_bot)"),
-}
+REDDIT_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+]
+
+def _reddit_headers():
+    """Return headers with a randomly rotated User-Agent."""
+    import random
+    return {
+        "User-Agent": random.choice(REDDIT_USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    }
 
 # Common English words that look like tickers but aren't
 TICKER_BLACKLIST = {
@@ -175,26 +188,38 @@ MOCK_DEX_DATA: dict = {
 
 # ───────────────────────── Reddit (JSON endpoint) ─────────────────────────
 
-def _fetch_reddit_json(subreddit: str, limit: int = 50) -> list[dict]:
-    """
-    Fetch recent posts from a subreddit using the public JSON endpoint.
-    No OAuth / PRAW required.  Returns a list of post dicts.
-    Raises on HTTP errors or rate-limiting.
-    """
-    url = f"https://www.reddit.com/r/{subreddit}/new.json"
-    resp = requests.get(
-        url,
-        headers=REDDIT_JSON_HEADERS,
-        params={"limit": limit, "raw_json": 1},
-        timeout=10,
-    )
-    # Reddit returns 429 when rate-limited
-    if resp.status_code == 429:
-        raise RuntimeError(f"Reddit rate-limited on r/{subreddit}")
-    resp.raise_for_status()
+_reddit_session = requests.Session()
 
-    children = resp.json().get("data", {}).get("children", [])
-    return [child["data"] for child in children]
+def _fetch_reddit_json(subreddit: str, limit: int = 25) -> list[dict]:
+    """
+    Fetch recent posts using a persistent session (keeps cookies).
+    Tries multiple Reddit domains as fallback.
+    """
+    domains = ["old.reddit.com", "www.reddit.com"]
+    
+    for domain in domains:
+        url = f"https://{domain}/r/{subreddit}/new.json"
+        try:
+            _reddit_session.headers.update(_reddit_headers())
+            resp = _reddit_session.get(
+                url,
+                params={"limit": limit, "raw_json": 1},
+                timeout=12,
+            )
+            if resp.status_code in (429, 403):
+                print(f"[scraper] {domain} returned {resp.status_code} for r/{subreddit}, trying next...")
+                time.sleep(2)
+                continue
+            resp.raise_for_status()
+            children = resp.json().get("data", {}).get("children", [])
+            if children:
+                print(f"[scraper] ✓ Fetched {len(children)} posts from {domain}/r/{subreddit}")
+                return [child["data"] for child in children]
+        except Exception as exc:
+            print(f"[scraper] {domain} failed for r/{subreddit}: {exc}")
+            time.sleep(1)
+    
+    raise RuntimeError(f"All Reddit endpoints blocked for r/{subreddit}")
 
 
 def get_reddit_data(limit: int = 50) -> dict:
@@ -222,16 +247,21 @@ def get_reddit_data(limit: int = 50) -> dict:
             for post in posts:
                 blob = f"{post.get('title', '')} {post.get('selftext', '')}"
                 tickers = CASHTAG_RE.findall(blob)
+                # Deduplicate: only count each ticker once per post
+                seen_in_post: set[str] = set()
                 for t in tickers:
                     t_upper = t.upper()
                     if t_upper in TICKER_BLACKLIST or len(t_upper) < 2:
                         continue
+                    if t_upper in seen_in_post:
+                        continue  # Skip duplicate mentions within the same post
+                    seen_in_post.add(t_upper)
                     mention_counter[t_upper] += 1
                     sentiment_texts.setdefault(t_upper, []).append(
                         post.get("title", "")
                     )
-            # Small delay between sub requests to be polite
-            time.sleep(1.0)
+            # Longer delay between sub requests to avoid rate limits
+            time.sleep(3.0)
         except Exception as exc:
             print(f"[scraper] ⚠ Reddit fetch failed for r/{sub_name}: {exc}")
 
