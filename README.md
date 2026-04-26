@@ -1,6 +1,6 @@
 # 📡 CoinRadar: Real-Time Meme Coin Intelligence
 
-![CoinRadar Hero](assets/hero.png)
+![CoinRadar Hero](assets/demo.png)
 
 > **Predict the hype, track the whales, and ride the moon.**  
 > CoinRadar is a high-performance intelligence terminal designed to identify breakout meme coins before they go parabolic.
